@@ -93,16 +93,18 @@ export default function App() {
   // Calculate Effective Keys and Allowed Modes based on active license
   const effectiveKeys = LicenseService.getEffectiveKeysForLicense(activeLicense);
 
-  // Automatically enforce restrictions if license is restricted
+  // Automatically select assigned tab when active license is loaded or changed
   useEffect(() => {
     if (activeLicense) {
-      if (activeLicense.featureMode === 'voice_only' && callMode !== 'audio_only') {
-        setCallMode('audio_only');
-      } else if (activeLicense.featureMode === 'video_only' && callMode === 'audio_only') {
-        setCallMode('video_only');
+      const assigned = LicenseService.getAssignedStudioMode(activeLicense.featureMode);
+      if (assigned !== 'all' && !isCallActive) {
+        setCallMode(assigned);
+        const updated = { ...config, callMode: assigned };
+        setConfig(updated);
+        CloudCallStore.saveConfig(updated);
       }
     }
-  }, [activeLicense]);
+  }, [activeLicense?.key, activeLicense?.featureMode]);
 
   // Keyboard shortcut (Ctrl+Shift+A) for hidden Admin Portal
   useEffect(() => {
@@ -200,22 +202,23 @@ export default function App() {
     }
 
     if (license.status === 'suspended') {
-      alert('This Product Key has been suspended by the administrator.');
+      setCallStatus('Access Denied: This Product Key has been suspended by the administrator.');
       return;
     }
 
     if (license.status === 'depleted' || (!license.isUnlimited && license.remainingMinutes <= 0)) {
-      alert('Your Product Key minutes have expired. Please contact the administrator to add minutes.');
+      setCallStatus('Your Product Key minutes have expired. Please contact your administrator.');
+      return;
+    }
+
+    // Verify Tab / Mode Permission for this Product Key
+    if (!LicenseService.isTabAccessible(callMode, license)) {
+      const allowedName = LicenseService.getFeatureModeDisplayName(license.featureMode);
+      setCallStatus(`Access Denied: Your Product Key is assigned exclusively to "${allowedName}". This tab is locked.`);
       return;
     }
 
     const keysInfo = LicenseService.getEffectiveKeysForLicense(license);
-
-    if ((callMode === 'video_audio' || callMode === 'video_only') && !keysInfo.isVideoAllowed) {
-      alert('Video transformation is locked on this license. Please use Audio-Only mode.');
-      setCallMode('audio_only');
-      return;
-    }
 
     try {
       const isVideoMode = callMode === 'video_audio' || callMode === 'video_only';
@@ -434,6 +437,54 @@ export default function App() {
   const currentMicName = currentSelectedMic?.label || 'Default Microphone';
   const currentActiveVoice = voices.find((v) => v.providerVoiceId === config.activeVoiceId);
 
+  // Tab Accessibility & License Plan Binding
+  const assignedStudioMode = activeLicense ? LicenseService.getAssignedStudioMode(activeLicense.featureMode) : 'all';
+  const assignedModeDisplayName = activeLicense ? LicenseService.getFeatureModeDisplayName(activeLicense.featureMode) : 'All Modes';
+  
+  const isVideoAudioAllowed = !activeLicense || LicenseService.isTabAccessible('video_audio', activeLicense);
+  const isAudioOnlyAllowed = !activeLicense || LicenseService.isTabAccessible('audio_only', activeLicense);
+  const isVideoOnlyAllowed = !activeLicense || LicenseService.isTabAccessible('video_only', activeLicense);
+
+  const isCurrentTabAllowed = !activeLicense || LicenseService.isTabAccessible(callMode, activeLicense);
+
+  const renderModeLockedBanner = (tabName: string) => (
+    <div className="bg-gradient-to-r from-amber-950/70 via-slate-900 to-amber-950/40 border border-amber-500/50 rounded-2xl p-4 sm:p-5 shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex items-start sm:items-center gap-3.5">
+        <div className="p-3 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 shrink-0">
+          <Lock className="w-6 h-6" />
+        </div>
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-extrabold text-sm text-white">
+              {tabName} Tab Locked
+            </h3>
+            {activeLicense?.key && (
+              <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-mono font-bold">
+                KEY: {activeLicense.key}
+              </span>
+            )}
+            <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-full font-mono font-semibold">
+              PREVIEW ONLY
+            </span>
+          </div>
+          <p className="text-xs text-slate-300 leading-relaxed max-w-2xl">
+            Your product key is assigned exclusively to <strong className="text-amber-300">{assignedModeDisplayName}</strong>. 
+            All buttons, controls, and functions on this tab are <strong className="text-slate-400">greyed out and disabled</strong>.
+          </p>
+        </div>
+      </div>
+      {assignedStudioMode !== 'all' && (
+        <button
+          type="button"
+          onClick={() => handleSwitchTab(assignedStudioMode as StudioCallMode)}
+          className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-colors shadow-lg shadow-indigo-600/30 flex items-center gap-2 shrink-0 cursor-pointer"
+        >
+          <span>Switch to Your Plan ({assignedModeDisplayName})</span>
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none">
       {/* Top Banner / Studio Header */}
@@ -483,18 +534,14 @@ export default function App() {
                 </span>
                 <span
                   className={`text-[9px] px-1.5 py-0.2 rounded font-semibold uppercase ${
-                    activeLicense.featureMode === 'video_only'
+                    assignedStudioMode === 'video_only'
                       ? 'bg-purple-900/80 text-purple-300'
-                      : activeLicense.featureMode === 'voice_only'
+                      : assignedStudioMode === 'audio_only'
                       ? 'bg-sky-900/80 text-sky-300'
                       : 'bg-indigo-900/80 text-indigo-300'
                   }`}
                 >
-                  {activeLicense.featureMode === 'video_only'
-                    ? 'Video Only'
-                    : activeLicense.featureMode === 'voice_only'
-                    ? 'Voice Only'
-                    : 'Full'}
+                  {assignedModeDisplayName}
                 </span>
               </div>
             </button>
@@ -533,27 +580,48 @@ export default function App() {
             {/* TAB 1: Video Call + Audio Call */}
             <button
               type="button"
-              disabled={isVideoLocked || (isCallActive && callMode !== 'video_audio')}
+              disabled={isCallActive && callMode !== 'video_audio'}
               onClick={() => handleSwitchTab('video_audio')}
               className={`p-3 rounded-xl border text-left transition-all relative ${
                 callMode === 'video_audio'
-                  ? 'bg-gradient-to-r from-indigo-950/90 to-purple-950/60 border-indigo-500 shadow-md ring-1 ring-indigo-500/40'
-                  : 'bg-slate-950/60 border-slate-800/80 hover:border-slate-700 text-slate-400 hover:text-slate-200'
-              } ${isVideoLocked ? 'opacity-40 cursor-not-allowed' : ''}`}
+                  ? isVideoAudioAllowed
+                    ? 'bg-gradient-to-r from-indigo-950/90 to-purple-950/60 border-indigo-500 shadow-md ring-1 ring-indigo-500/40 text-white'
+                    : 'bg-slate-900 border-amber-500/60 shadow-md text-amber-200 ring-1 ring-amber-500/30'
+                  : isVideoAudioAllowed
+                  ? 'bg-slate-950/60 border-slate-800/80 hover:border-slate-700 text-slate-300 hover:text-white'
+                  : 'bg-slate-950/40 border-slate-800/50 text-slate-500 opacity-60 hover:opacity-85 hover:border-slate-700'
+              }`}
             >
               <div className="flex items-center justify-between mb-1">
-                <div className="flex items-center gap-2 font-bold text-xs text-white">
-                  <div className={`p-1.5 rounded-lg ${callMode === 'video_audio' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300'}`}>
+                <div className="flex items-center gap-2 font-bold text-xs">
+                  <div
+                    className={`p-1.5 rounded-lg ${
+                      callMode === 'video_audio'
+                        ? isVideoAudioAllowed
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-slate-800 text-slate-400'
+                        : isVideoAudioAllowed
+                        ? 'bg-slate-800 text-slate-300'
+                        : 'bg-slate-900 text-slate-600'
+                    }`}
+                  >
                     <Video className="w-4 h-4" />
                   </div>
-                  <span>1. Video Call + Audio Call</span>
+                  <span className={isVideoAudioAllowed ? 'text-white' : 'text-slate-400'}>
+                    1. Video Call + Audio Call
+                  </span>
                 </div>
-                {callMode === 'video_audio' && (
+                {callMode === 'video_audio' && isVideoAudioAllowed && (
                   <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
                 )}
-                {isVideoLocked && <Lock className="w-3 h-3 text-rose-400" />}
+                {!isVideoAudioAllowed && (
+                  <span className="flex items-center gap-1 text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-slate-900 text-slate-500 border border-slate-800">
+                    <Lock className="w-2.5 h-2.5 text-amber-400" />
+                    <span>LOCKED</span>
+                  </span>
+                )}
               </div>
-              <p className="text-[11px] text-slate-400 pl-8 leading-tight">
+              <p className={`text-[11px] pl-8 leading-tight ${isVideoAudioAllowed ? 'text-slate-400' : 'text-slate-600'}`}>
                 Real-time video & audio. Choose natural voice or cloned voice with custom voice uploads.
               </p>
             </button>
@@ -565,22 +633,44 @@ export default function App() {
               onClick={() => handleSwitchTab('audio_only')}
               className={`p-3 rounded-xl border text-left transition-all relative ${
                 callMode === 'audio_only'
-                  ? 'bg-gradient-to-r from-sky-950/90 to-cyan-950/60 border-sky-500 shadow-md ring-1 ring-sky-500/40'
-                  : 'bg-slate-950/60 border-slate-800/80 hover:border-slate-700 text-slate-400 hover:text-slate-200'
+                  ? isAudioOnlyAllowed
+                    ? 'bg-gradient-to-r from-sky-950/90 to-cyan-950/60 border-sky-500 shadow-md ring-1 ring-sky-500/40 text-white'
+                    : 'bg-slate-900 border-amber-500/60 shadow-md text-amber-200 ring-1 ring-amber-500/30'
+                  : isAudioOnlyAllowed
+                  ? 'bg-slate-950/60 border-slate-800/80 hover:border-slate-700 text-slate-300 hover:text-white'
+                  : 'bg-slate-950/40 border-slate-800/50 text-slate-500 opacity-60 hover:opacity-85 hover:border-slate-700'
               }`}
             >
               <div className="flex items-center justify-between mb-1">
-                <div className="flex items-center gap-2 font-bold text-xs text-white">
-                  <div className={`p-1.5 rounded-lg ${callMode === 'audio_only' ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300'}`}>
+                <div className="flex items-center gap-2 font-bold text-xs">
+                  <div
+                    className={`p-1.5 rounded-lg ${
+                      callMode === 'audio_only'
+                        ? isAudioOnlyAllowed
+                          ? 'bg-sky-600 text-white'
+                          : 'bg-slate-800 text-slate-400'
+                        : isAudioOnlyAllowed
+                        ? 'bg-slate-800 text-slate-300'
+                        : 'bg-slate-900 text-slate-600'
+                    }`}
+                  >
                     <Headphones className="w-4 h-4" />
                   </div>
-                  <span>2. Audio Calls Only</span>
+                  <span className={isAudioOnlyAllowed ? 'text-white' : 'text-slate-400'}>
+                    2. Audio Calls Only
+                  </span>
                 </div>
-                {callMode === 'audio_only' && (
+                {callMode === 'audio_only' && isAudioOnlyAllowed && (
                   <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
                 )}
+                {!isAudioOnlyAllowed && (
+                  <span className="flex items-center gap-1 text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-slate-900 text-slate-500 border border-slate-800">
+                    <Lock className="w-2.5 h-2.5 text-amber-400" />
+                    <span>LOCKED</span>
+                  </span>
+                )}
               </div>
-              <p className="text-[11px] text-slate-400 pl-8 leading-tight">
+              <p className={`text-[11px] pl-8 leading-tight ${isAudioOnlyAllowed ? 'text-slate-400' : 'text-slate-600'}`}>
                 Audio-only calls without video interface. Select microphone, natural mic or cloned voice.
               </p>
             </button>
@@ -588,27 +678,48 @@ export default function App() {
             {/* TAB 3: Video Calls Only */}
             <button
               type="button"
-              disabled={isVideoLocked || (isCallActive && callMode !== 'video_only')}
+              disabled={isCallActive && callMode !== 'video_only'}
               onClick={() => handleSwitchTab('video_only')}
               className={`p-3 rounded-xl border text-left transition-all relative ${
                 callMode === 'video_only'
-                  ? 'bg-gradient-to-r from-purple-950/90 to-pink-950/60 border-purple-500 shadow-md ring-1 ring-purple-500/40'
-                  : 'bg-slate-950/60 border-slate-800/80 hover:border-slate-700 text-slate-400 hover:text-slate-200'
-              } ${isVideoLocked ? 'opacity-40 cursor-not-allowed' : ''}`}
+                  ? isVideoOnlyAllowed
+                    ? 'bg-gradient-to-r from-purple-950/90 to-pink-950/60 border-purple-500 shadow-md ring-1 ring-purple-500/40 text-white'
+                    : 'bg-slate-900 border-amber-500/60 shadow-md text-amber-200 ring-1 ring-amber-500/30'
+                  : isVideoOnlyAllowed
+                  ? 'bg-slate-950/60 border-slate-800/80 hover:border-slate-700 text-slate-300 hover:text-white'
+                  : 'bg-slate-950/40 border-slate-800/50 text-slate-500 opacity-60 hover:opacity-85 hover:border-slate-700'
+              }`}
             >
               <div className="flex items-center justify-between mb-1">
-                <div className="flex items-center gap-2 font-bold text-xs text-white">
-                  <div className={`p-1.5 rounded-lg ${callMode === 'video_only' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-300'}`}>
+                <div className="flex items-center gap-2 font-bold text-xs">
+                  <div
+                    className={`p-1.5 rounded-lg ${
+                      callMode === 'video_only'
+                        ? isVideoOnlyAllowed
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-slate-800 text-slate-400'
+                        : isVideoOnlyAllowed
+                        ? 'bg-slate-800 text-slate-300'
+                        : 'bg-slate-900 text-slate-600'
+                    }`}
+                  >
                     <Camera className="w-4 h-4" />
                   </div>
-                  <span>3. Video Calls Only</span>
+                  <span className={isVideoOnlyAllowed ? 'text-white' : 'text-slate-400'}>
+                    3. Video Calls Only
+                  </span>
                 </div>
-                {callMode === 'video_only' && (
+                {callMode === 'video_only' && isVideoOnlyAllowed && (
                   <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
                 )}
-                {isVideoLocked && <Lock className="w-3 h-3 text-rose-400" />}
+                {!isVideoOnlyAllowed && (
+                  <span className="flex items-center gap-1 text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-slate-900 text-slate-500 border border-slate-800">
+                    <Lock className="w-2.5 h-2.5 text-amber-400" />
+                    <span>LOCKED</span>
+                  </span>
+                )}
               </div>
-              <p className="text-[11px] text-slate-400 pl-8 leading-tight">
+              <p className={`text-[11px] pl-8 leading-tight ${isVideoOnlyAllowed ? 'text-slate-400' : 'text-slate-600'}`}>
                 Video-call interface only. Uses natural microphone by default with full mic selector.
               </p>
             </button>
@@ -619,7 +730,9 @@ export default function App() {
         {/* MODE 1 INTERFACE: VIDEO CALL + AUDIO CALL                                */}
         {/* ========================================================================= */}
         {callMode === 'video_audio' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="space-y-4">
+            {!isVideoAudioAllowed && renderModeLockedBanner('Video Call + Audio Call')}
+            <div className={`grid grid-cols-1 lg:grid-cols-12 gap-6 ${!isVideoAudioAllowed ? 'opacity-40 grayscale pointer-events-none select-none cursor-not-allowed' : ''}`}>
             {/* Left Column: Stage Viewport & Video Controls (7 Cols) */}
             <div className="lg:col-span-7 space-y-4">
               {/* Orientation Mode Switcher */}
@@ -741,10 +854,24 @@ export default function App() {
                       </div>
                       <button
                         onClick={handleStartCall}
-                        className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all hover:scale-105"
+                        disabled={!isVideoAudioAllowed}
+                        className={`px-6 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-lg transition-all ${
+                          isVideoAudioAllowed
+                            ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30 hover:scale-105 cursor-pointer'
+                            : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                        }`}
                       >
-                        <PhoneCall className="w-4 h-4" />
-                        <span>Start Video + Audio Call</span>
+                        {isVideoAudioAllowed ? (
+                          <>
+                            <PhoneCall className="w-4 h-4" />
+                            <span>Start Video + Audio Call</span>
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="w-4 h-4 text-amber-400" />
+                            <span>Plan Required (Assigned: {assignedModeDisplayName})</span>
+                          </>
+                        )}
                       </button>
                     </div>
                   )}
@@ -1041,13 +1168,16 @@ export default function App() {
               </div>
             </div>
           </div>
+          </div>
         )}
 
         {/* ========================================================================= */}
         {/* MODE 2 INTERFACE: AUDIO CALLS ONLY                                       */}
         {/* ========================================================================= */}
         {callMode === 'audio_only' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="space-y-4">
+            {!isAudioOnlyAllowed && renderModeLockedBanner('Audio Calls Only')}
+            <div className={`grid grid-cols-1 lg:grid-cols-12 gap-6 ${!isAudioOnlyAllowed ? 'opacity-40 grayscale pointer-events-none select-none cursor-not-allowed' : ''}`}>
             {/* Left Column: Dedicated Audio Call Stage (7 Cols) */}
             <div className="lg:col-span-7 space-y-4">
               <div className="bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-6 sm:p-8 flex flex-col items-center justify-center text-center shadow-xl relative overflow-hidden min-h-[380px]">
@@ -1122,10 +1252,24 @@ export default function App() {
                   {!isCallActive ? (
                     <button
                       onClick={handleStartCall}
-                      className="px-8 py-3 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-sm font-bold flex items-center gap-2.5 shadow-xl shadow-sky-600/30 transition-all hover:scale-105 cursor-pointer"
+                      disabled={!isAudioOnlyAllowed}
+                      className={`px-8 py-3 rounded-xl text-sm font-bold flex items-center gap-2.5 shadow-xl transition-all ${
+                        isAudioOnlyAllowed
+                          ? 'bg-sky-600 hover:bg-sky-500 text-white shadow-sky-600/30 hover:scale-105 cursor-pointer'
+                          : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                      }`}
                     >
-                      <PhoneCall className="w-4 h-4" />
-                      <span>Start Live Audio Call</span>
+                      {isAudioOnlyAllowed ? (
+                        <>
+                          <PhoneCall className="w-4 h-4" />
+                          <span>Start Live Audio Call</span>
+                        </>
+                      ) : (
+                        <>
+                          <Lock className="w-4 h-4 text-amber-400" />
+                          <span>Plan Required (Assigned: {assignedModeDisplayName})</span>
+                        </>
+                      )}
                     </button>
                   ) : (
                     <button
@@ -1311,13 +1455,16 @@ export default function App() {
               </div>
             </div>
           </div>
+          </div>
         )}
 
         {/* ========================================================================= */}
         {/* MODE 3 INTERFACE: VIDEO CALLS ONLY                                       */}
         {/* ========================================================================= */}
         {callMode === 'video_only' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="space-y-4">
+            {!isVideoOnlyAllowed && renderModeLockedBanner('Video Calls Only')}
+            <div className={`grid grid-cols-1 lg:grid-cols-12 gap-6 ${!isVideoOnlyAllowed ? 'opacity-40 grayscale pointer-events-none select-none cursor-not-allowed' : ''}`}>
             {/* Left Column: Stage Viewport & Video Controls (7 Cols) */}
             <div className="lg:col-span-7 space-y-4">
               {/* Orientation Switcher */}
@@ -1438,10 +1585,24 @@ export default function App() {
                       </div>
                       <button
                         onClick={handleStartCall}
-                        className="px-6 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-semibold flex items-center gap-2 shadow-lg shadow-purple-600/30 transition-all hover:scale-105"
+                        disabled={!isVideoOnlyAllowed}
+                        className={`px-6 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-lg transition-all ${
+                          isVideoOnlyAllowed
+                            ? 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/30 hover:scale-105 cursor-pointer'
+                            : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                        }`}
                       >
-                        <PhoneCall className="w-4 h-4" />
-                        <span>Start Video Only Call</span>
+                        {isVideoOnlyAllowed ? (
+                          <>
+                            <PhoneCall className="w-4 h-4" />
+                            <span>Start Video Only Call</span>
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="w-4 h-4 text-amber-400" />
+                            <span>Plan Required (Assigned: {assignedModeDisplayName})</span>
+                          </>
+                        )}
                       </button>
                     </div>
                   )}
@@ -1691,6 +1852,7 @@ export default function App() {
                 </div>
               </div>
             </div>
+          </div>
           </div>
         )}
 

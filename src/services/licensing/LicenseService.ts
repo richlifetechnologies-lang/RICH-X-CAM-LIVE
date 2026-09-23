@@ -29,7 +29,7 @@ const DEFAULT_ADMIN_CONFIG: AdminSecurityConfig = {
 
 const INITIAL_STARTER_KEY: LicenseKeyItem = {
   key: 'RICHX-DEMO-60MIN-LIVE',
-  clientName: 'Demo Starter License (Full Access)',
+  clientName: 'Demo Starter License (Video + Audio)',
   allocatedMinutes: 60,
   usedMinutes: 0,
   remainingMinutes: 60,
@@ -40,8 +40,8 @@ const INITIAL_STARTER_KEY: LicenseKeyItem = {
   firstActivatedAt: null,
   lastActiveAt: null,
   createdAt: Date.now(),
-  notes: 'Pre-seeded starter key with both Video & Voice active',
-  featureMode: 'full',
+  notes: 'Pre-seeded starter key assigned to Video Call + Audio Call',
+  featureMode: 'video_audio',
   assignedVideoKeyId: null,
   assignedVoiceKeyId: null,
 };
@@ -187,12 +187,46 @@ export class LicenseService {
     localStorage.setItem(STORAGE_LICENSES, JSON.stringify(licenses));
   }
 
+  public static getAssignedStudioMode(mode: LicenseFeatureMode): 'video_audio' | 'audio_only' | 'video_only' | 'all' {
+    if (mode === 'all') return 'all';
+    if (mode === 'audio_only' || mode === 'voice_only') return 'audio_only';
+    if (mode === 'video_only') return 'video_only';
+    return 'video_audio';
+  }
+
+  public static isTabAccessible(
+    tab: 'video_audio' | 'audio_only' | 'video_only',
+    license: LicenseKeyItem | null
+  ): boolean {
+    if (!license) return false;
+    const assigned = this.getAssignedStudioMode(license.featureMode);
+    if (assigned === 'all') return true;
+    return assigned === tab;
+  }
+
+  public static getFeatureModeDisplayName(mode: LicenseFeatureMode): string {
+    switch (mode) {
+      case 'video_audio':
+      case 'full':
+        return 'Video Call + Audio Call';
+      case 'audio_only':
+      case 'voice_only':
+        return 'Audio Calls Only';
+      case 'video_only':
+        return 'Video Calls Only';
+      case 'all':
+        return 'All 3 Modes (Admin VIP)';
+      default:
+        return 'Video Call + Audio Call';
+    }
+  }
+
   public static generateKey(
     clientName: string,
     minutes: number,
     isUnlimited = false,
     notes = '',
-    featureMode: LicenseFeatureMode = 'full',
+    featureMode: LicenseFeatureMode = 'video_audio',
     assignedVideoKeyId: string | null = null,
     assignedVoiceKeyId: string | null = null
   ): LicenseKeyItem {
@@ -202,8 +236,16 @@ export class LicenseService {
     for (let i = 0; i < 4; i++) p1 += chars.charAt(Math.floor(Math.random() * chars.length));
     for (let i = 0; i < 4; i++) p2 += chars.charAt(Math.floor(Math.random() * chars.length));
 
-    const prefix = featureMode === 'video_only' ? 'VDO' : featureMode === 'voice_only' ? 'VOC' : 'ALL';
+    let prefix = 'VDA';
+    if (featureMode === 'audio_only' || featureMode === 'voice_only') prefix = 'AUD';
+    else if (featureMode === 'video_only') prefix = 'VDO';
+    else if (featureMode === 'all') prefix = 'ALL';
+    else prefix = 'VDA';
+
     const key = `RICHX-${prefix}-${p1}-${p2}`;
+
+    const isAudioOnly = featureMode === 'audio_only' || featureMode === 'voice_only';
+    const isVideoOnly = featureMode === 'video_only';
 
     const newLicense: LicenseKeyItem = {
       key,
@@ -220,8 +262,8 @@ export class LicenseService {
       createdAt: Date.now(),
       notes: notes.trim(),
       featureMode,
-      assignedVideoKeyId: featureMode === 'voice_only' ? null : assignedVideoKeyId,
-      assignedVoiceKeyId: featureMode === 'video_only' ? null : assignedVoiceKeyId,
+      assignedVideoKeyId: isAudioOnly ? null : assignedVideoKeyId,
+      assignedVoiceKeyId: isVideoOnly ? null : assignedVoiceKeyId,
     };
 
     const all = this.getAllLicenses();
@@ -239,9 +281,12 @@ export class LicenseService {
     const all = this.getAllLicenses();
     const license = all.find((l) => l.key === key);
     if (license) {
+      const isAudioOnly = featureMode === 'audio_only' || featureMode === 'voice_only';
+      const isVideoOnly = featureMode === 'video_only';
+
       license.featureMode = featureMode;
-      license.assignedVideoKeyId = featureMode === 'voice_only' ? null : assignedVideoKeyId;
-      license.assignedVoiceKeyId = featureMode === 'video_only' ? null : assignedVoiceKeyId;
+      license.assignedVideoKeyId = isAudioOnly ? null : assignedVideoKeyId;
+      license.assignedVoiceKeyId = isVideoOnly ? null : assignedVoiceKeyId;
       this.saveAllLicenses(all);
 
       const current = this.getActiveClientLicense();
@@ -266,7 +311,7 @@ export class LicenseService {
       return {
         videoKey: adminConfig.masterVideoEngineKey || '',
         voiceKey: adminConfig.masterVoiceEngineKey || '',
-        featureMode: 'full',
+        featureMode: 'video_audio',
         isVideoAllowed: true,
         isVoiceAllowed: true,
         videoKeyLabel: 'Master Default',
@@ -274,14 +319,16 @@ export class LicenseService {
       };
     }
 
-    const mode = license.featureMode || 'full';
+    const mode = license.featureMode || 'video_audio';
+    const assignedMode = this.getAssignedStudioMode(mode);
+
     let videoKey = '';
     let videoKeyLabel = 'None';
     let voiceKey = '';
     let voiceKeyLabel = 'None';
 
-    const isVideoAllowed = mode === 'full' || mode === 'video_only';
-    const isVoiceAllowed = mode === 'full' || mode === 'voice_only';
+    const isVideoAllowed = assignedMode === 'video_audio' || assignedMode === 'video_only' || assignedMode === 'all';
+    const isVoiceAllowed = assignedMode === 'video_audio' || assignedMode === 'audio_only' || assignedMode === 'all';
 
     // Resolve Video Key if allowed
     if (isVideoAllowed) {

@@ -64,14 +64,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [newAllocatedMinutes, setNewAllocatedMinutes] = useState<number>(60);
   const [isUnlimited, setIsUnlimited] = useState(false);
   const [newNotes, setNewNotes] = useState('');
-  const [newFeatureMode, setNewFeatureMode] = useState<LicenseFeatureMode>('full');
+  const [newFeatureMode, setNewFeatureMode] = useState<LicenseFeatureMode>('video_audio');
   const [newAssignedVideoKeyId, setNewAssignedVideoKeyId] = useState<string>('');
   const [newAssignedVoiceKeyId, setNewAssignedVoiceKeyId] = useState<string>('');
   const [generatedKeyResult, setGeneratedKeyResult] = useState<string | null>(null);
 
   // Edit / Assign Keys Modal for Existing License
   const [assigningLicense, setAssigningLicense] = useState<LicenseKeyItem | null>(null);
-  const [editFeatureMode, setEditFeatureMode] = useState<LicenseFeatureMode>('full');
+  const [editFeatureMode, setEditFeatureMode] = useState<LicenseFeatureMode>('video_audio');
   const [editAssignedVideoKeyId, setEditAssignedVideoKeyId] = useState<string>('');
   const [editAssignedVoiceKeyId, setEditAssignedVoiceKeyId] = useState<string>('');
 
@@ -164,7 +164,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   // Assign / Edit Permissions for existing license
   const openAssignModal = (lic: LicenseKeyItem) => {
     setAssigningLicense(lic);
-    setEditFeatureMode(lic.featureMode || 'full');
+    setEditFeatureMode(lic.featureMode || 'video_audio');
     setEditAssignedVideoKeyId(lic.assignedVideoKeyId || '');
     setEditAssignedVoiceKeyId(lic.assignedVoiceKeyId || '');
   };
@@ -469,16 +469,17 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         {/* Feature Mode Selector */}
                         <div>
                           <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                            Call Mode Permissions:
+                            Assigned Call Mode & Tab:
                           </label>
                           <select
                             value={newFeatureMode}
                             onChange={(e) => setNewFeatureMode(e.target.value as LicenseFeatureMode)}
-                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium"
                           >
-                            <option value="full">Full Suite (Video Transformation + Cloned Voice)</option>
-                            <option value="video_only">Video Only (Normal Mic Only, Voice Clone Locked)</option>
-                            <option value="voice_only">Voice Only (Cloned Voice Calls, Video Locked)</option>
+                            <option value="video_audio">1. Video Call + Audio Call (Video + Voice Cloning)</option>
+                            <option value="audio_only">2. Audio Calls Only (Audio Studio, No Camera)</option>
+                            <option value="video_only">3. Video Calls Only (Video Interface & Natural Mic)</option>
+                            <option value="all">★ All 3 Modes (Admin VIP Unrestricted)</option>
                           </select>
                         </div>
 
@@ -621,16 +622,20 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                     className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
                                       lic.featureMode === 'video_only'
                                         ? 'bg-purple-950/80 text-purple-300 border-purple-800/60'
-                                        : lic.featureMode === 'voice_only'
+                                        : lic.featureMode === 'audio_only' || lic.featureMode === 'voice_only'
                                         ? 'bg-sky-950/80 text-sky-300 border-sky-800/60'
+                                        : lic.featureMode === 'all'
+                                        ? 'bg-amber-950/80 text-amber-300 border-amber-800/60'
                                         : 'bg-indigo-950/80 text-indigo-300 border-indigo-800/60'
                                     }`}
                                   >
                                     {lic.featureMode === 'video_only'
                                       ? 'VIDEO ONLY'
-                                      : lic.featureMode === 'voice_only'
-                                      ? 'VOICE ONLY'
-                                      : 'FULL (VDO+VOC)'}
+                                      : lic.featureMode === 'audio_only' || lic.featureMode === 'voice_only'
+                                      ? 'AUDIO ONLY'
+                                      : lic.featureMode === 'all'
+                                      ? 'ALL 3 MODES'
+                                      : 'VIDEO + AUDIO'}
                                   </span>
                                 </td>
 
@@ -1258,23 +1263,27 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               {/* Mode Selection */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-slate-300">
-                  Feature Mode Permissions:
+                  Assigned Call Mode & Accessible Tab:
                 </label>
                 <select
                   value={editFeatureMode}
                   onChange={(e) => setEditFeatureMode(e.target.value as LicenseFeatureMode)}
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium"
                 >
-                  <option value="full">Full Suite (Both Video & Voice Clone Allowed)</option>
-                  <option value="video_only">Video Only (Normal Mic Only, Voice Clone Locked)</option>
-                  <option value="voice_only">Voice Only (Cloned Voice Calls, Video Locked)</option>
+                  <option value="video_audio">1. Video Call + Audio Call (Video + Voice Cloning)</option>
+                  <option value="audio_only">2. Audio Calls Only (Audio Studio, No Camera)</option>
+                  <option value="video_only">3. Video Calls Only (Video Interface & Natural Mic)</option>
+                  <option value="all">★ All 3 Modes (Admin VIP Unrestricted)</option>
                 </select>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-slate-400">
+                  {editFeatureMode === 'video_audio' &&
+                    'Customer key can only access the "Video Call + Audio Call" tab. Other tabs will be locked and greyed out.'}
+                  {editFeatureMode === 'audio_only' &&
+                    'Customer key can only access the "Audio Calls Only" tab. Other tabs will be locked and greyed out.'}
                   {editFeatureMode === 'video_only' &&
-                    'Customer can only use live video with normal microphone; voice cloning is disabled in UI.'}
-                  {editFeatureMode === 'voice_only' &&
-                    'Customer can only use voice cloning for calls; video transformation engine is disabled.'}
-                  {editFeatureMode === 'full' && 'Customer can use both live video transformation and voice cloning.'}
+                    'Customer key can only access the "Video Calls Only" tab. Other tabs will be locked and greyed out.'}
+                  {editFeatureMode === 'all' &&
+                    'Customer key has unrestricted access to all 3 tabs.'}
                 </p>
               </div>
 

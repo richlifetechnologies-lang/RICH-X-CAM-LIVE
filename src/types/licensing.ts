@@ -1,4 +1,10 @@
-export type LicenseFeatureMode = 'full' | 'video_only' | 'voice_only';
+export type LicenseFeatureMode =
+  | 'video_audio' // Video Call + Audio Call only
+  | 'audio_only'  // Audio Calls Only
+  | 'video_only'  // Video Calls Only
+  | 'all'         // All 3 Modes Unrestricted (Admin VIP)
+  | 'full'        // Backwards compatibility alias for Video + Audio
+  | 'voice_only'; // Backwards compatibility alias for Audio Only
 
 export interface ApiKeyVaultItem {
   id: string;
@@ -26,7 +32,7 @@ export interface LicenseKeyItem {
   notes: string;
 
   // Granular Access & Dedicated API Key Bindings
-  featureMode: LicenseFeatureMode; // 'full' | 'video_only' | 'voice_only'
+  featureMode: LicenseFeatureMode;
   assignedVideoKeyId?: string | null; // ID from ApiKeyVaultItem or null (uses default)
   assignedVoiceKeyId?: string | null; // ID from ApiKeyVaultItem or null (uses default)
 }

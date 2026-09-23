@@ -23,22 +23,14 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: Cache node modules
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
+          node-version: 22
 
       - name: Install dependencies
         shell: pwsh
         run: |
+          if (Test-Path package-lock.json) { Remove-Item -Force package-lock.json }
           npm install --legacy-peer-deps
-          npm install @rollup/rollup-win32-x64-msvc --no-save
+          npm install @rollup/rollup-win32-x64-msvc lightningcss-win32-x64-msvc --no-save
 
       - name: Build Web Application (Vite)
         shell: pwsh

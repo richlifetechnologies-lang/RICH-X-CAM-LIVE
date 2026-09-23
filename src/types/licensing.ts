@@ -35,13 +35,34 @@ export interface LicenseKeyItem {
   featureMode: LicenseFeatureMode;
   assignedVideoKeyId?: string | null; // ID from ApiKeyVaultItem or null (uses default)
   assignedVoiceKeyId?: string | null; // ID from ApiKeyVaultItem or null (uses default)
+
+  // Financial & Rate Tracking for this Key
+  clientPriceChargedUsd?: number; // How much the client was charged (e.g. $150.00)
 }
 
 export interface TimerConsumptionConfig {
   videoOnlyRateMultiplier: number;
   clonedVoiceRateMultiplier: number;
+  audioOnlyRateMultiplier?: number;
   warningThresholdMinutes: number;
   autoTerminateAtZero: boolean;
+}
+
+export interface RuleProfitabilityAnalysis {
+  allocatedMinutes: number;
+  timerMultiplier: number;
+  realAllowedMinutes: number;
+  featureMode: LicenseFeatureMode;
+  rawApiCostPerMinuteUsd: number;
+  totalRawApiCostUsd: number;
+  breakEvenPriceUsd: number;
+  suggestedPriceUsd: number;
+  clientPriceChargedUsd: number;
+  netProfitUsd: number;
+  profitMarginPercent: number;
+  isProfitable: boolean;
+  status: 'profitable' | 'loss' | 'breakeven' | 'unset';
+  lossAmountUsd: number;
 }
 
 /**

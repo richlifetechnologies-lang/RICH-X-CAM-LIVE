@@ -599,20 +599,6 @@ export default function App() {
             <HelpCircle className="w-3.5 h-3.5 text-sky-400" />
             <span className="hidden sm:inline">Calling Apps Guide</span>
           </button>
-
-          {/* Live In-Call Verified Financial HUD */}
-          {isCallActive && sessionFinancials && (
-            <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-950/80 border border-emerald-600/60 text-xs font-mono text-emerald-300 shadow-md">
-              <TrendingUp className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              <div className="flex items-center gap-1.5">
-                <span className="text-slate-400">API:</span>
-                <span className="text-white font-bold">${sessionFinancials.totalRawApiCostUsd.toFixed(3)}</span>
-                <span className="text-emerald-700">|</span>
-                <span className="text-slate-400">Margin:</span>
-                <span className="text-emerald-400 font-bold">+{sessionFinancials.profitMarginAchievedPercent}%</span>
-              </div>
-            </div>
-          )}
         </div>
       </header>
 

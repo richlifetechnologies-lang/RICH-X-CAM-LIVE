@@ -1,5 +1,10 @@
 import { StudioCallMode } from '../../types/cloudCall';
-import { ApiProviderCostConfig, SessionFinancials } from '../../types/licensing';
+import {
+  ApiProviderCostConfig,
+  SessionFinancials,
+  LicenseFeatureMode,
+  RuleProfitabilityAnalysis,
+} from '../../types/licensing';
 
 const STORAGE_PROVIDER_COSTS = 'richx_api_provider_costs_v1';
 
@@ -230,5 +235,72 @@ export class BillingRateEngine {
 
     // Minimum multiplier 0.1x, maximum 1.5x
     return +Math.max(0.1, Math.min(2.0, ratio)).toFixed(2);
+  }
+
+  /**
+   * Evaluates the exact profit or loss for ANY given time and minute rules.
+   * Compares the allocated minutes, timer multiplier, selected call mode, and retail price charged
+   * against the verified underlying API costs (Lucy 2.5 + ElevenLabs STS).
+   */
+  public static calculateRuleProfitability(
+    allocatedMinutes: number,
+    featureMode: LicenseFeatureMode,
+    clientPriceChargedUsd: number = 0,
+    timerMultiplier: number = 1.0,
+    clonedVoiceExpected: boolean = true
+  ): RuleProfitabilityAnalysis {
+    const costs = this.getProviderCosts();
+    const effectiveMultiplier = Math.max(0.1, timerMultiplier || 1.0);
+    
+    // How many actual real-world calling minutes the user gets before the key expires
+    const realAllowedMinutes = allocatedMinutes / effectiveMultiplier;
+    
+    // Map license feature mode to StudioCallMode
+    let mode: StudioCallMode = 'video_audio';
+    if (featureMode === 'audio_only' || featureMode === 'voice_only') mode = 'audio_only';
+    else if (featureMode === 'video_only') mode = 'video_only';
+    else mode = 'video_audio';
+
+    const rawCostsSec = this.getRawApiCostPerSecond(mode, clonedVoiceExpected);
+    const rawApiCostPerMinuteUsd = +(rawCostsSec.totalRawCostSec * 60).toFixed(4);
+    const totalRawApiCostUsd = +(realAllowedMinutes * rawApiCostPerMinuteUsd).toFixed(2);
+    
+    const breakEvenPriceUsd = totalRawApiCostUsd;
+    const targetMargin = Math.max(costs.profitMarginPercent, costs.minGuaranteedProfitMarginPercent);
+    const suggestedPriceUsd = +(totalRawApiCostUsd * (1 + targetMargin / 100)).toFixed(2);
+
+    const price = Math.max(0, clientPriceChargedUsd || 0);
+    const netProfitUsd = +(price - totalRawApiCostUsd).toFixed(2);
+    const profitMarginPercent = price > 0 ? +((netProfitUsd / price) * 100).toFixed(1) : 0;
+    const isProfitable = price > totalRawApiCostUsd;
+    const lossAmountUsd = isProfitable ? 0 : +(totalRawApiCostUsd - price).toFixed(2);
+
+    let status: 'profitable' | 'loss' | 'breakeven' | 'unset' = 'unset';
+    if (price === 0) {
+      status = 'unset';
+    } else if (price > totalRawApiCostUsd) {
+      status = 'profitable';
+    } else if (price === totalRawApiCostUsd) {
+      status = 'breakeven';
+    } else {
+      status = 'loss';
+    }
+
+    return {
+      allocatedMinutes,
+      timerMultiplier: effectiveMultiplier,
+      realAllowedMinutes: +realAllowedMinutes.toFixed(1),
+      featureMode,
+      rawApiCostPerMinuteUsd,
+      totalRawApiCostUsd,
+      breakEvenPriceUsd,
+      suggestedPriceUsd,
+      clientPriceChargedUsd: price,
+      netProfitUsd,
+      profitMarginPercent,
+      isProfitable,
+      status,
+      lossAmountUsd,
+    };
   }
 }

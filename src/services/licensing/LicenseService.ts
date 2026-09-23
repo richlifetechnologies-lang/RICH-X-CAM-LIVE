@@ -231,7 +231,8 @@ export class LicenseService {
     notes = '',
     featureMode: LicenseFeatureMode = 'video_audio',
     assignedVideoKeyId: string | null = null,
-    assignedVoiceKeyId: string | null = null
+    assignedVoiceKeyId: string | null = null,
+    clientPriceChargedUsd = 0
   ): LicenseKeyItem {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let p1 = '';
@@ -267,12 +268,28 @@ export class LicenseService {
       featureMode,
       assignedVideoKeyId: isAudioOnly ? null : assignedVideoKeyId,
       assignedVoiceKeyId: isVideoOnly ? null : assignedVoiceKeyId,
+      clientPriceChargedUsd: Math.max(0, clientPriceChargedUsd || 0),
     };
 
     const all = this.getAllLicenses();
     const updated = [newLicense, ...all];
     this.saveAllLicenses(updated);
     return newLicense;
+  }
+
+  public static updateLicensePrice(key: string, price: number): void {
+    const all = this.getAllLicenses();
+    const license = all.find((l) => l.key === key);
+    if (license) {
+      license.clientPriceChargedUsd = Math.max(0, price || 0);
+      this.saveAllLicenses(all);
+
+      const current = this.getActiveClientLicense();
+      if (current && current.key === key) {
+        current.clientPriceChargedUsd = license.clientPriceChargedUsd;
+        localStorage.setItem(STORAGE_CURRENT_LICENSE, JSON.stringify(current));
+      }
+    }
   }
 
   public static updateLicensePermissions(

@@ -39,6 +39,7 @@ import {
   ApiKeyVaultItem,
   LicenseFeatureMode,
   ApiProviderCostConfig,
+  RuleProfitabilityAnalysis,
 } from '../types/licensing';
 import { StudioCallMode } from '../types/cloudCall';
 
@@ -75,12 +76,22 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   // Generator form
   const [newClientName, setNewClientName] = useState('');
   const [newAllocatedMinutes, setNewAllocatedMinutes] = useState<number>(60);
+  const [newClientPrice, setNewClientPrice] = useState<number>(0);
   const [isUnlimited, setIsUnlimited] = useState(false);
   const [newNotes, setNewNotes] = useState('');
   const [newFeatureMode, setNewFeatureMode] = useState<LicenseFeatureMode>('video_audio');
   const [newAssignedVideoKeyId, setNewAssignedVideoKeyId] = useState<string>('');
   const [newAssignedVoiceKeyId, setNewAssignedVoiceKeyId] = useState<string>('');
   const [generatedKeyResult, setGeneratedKeyResult] = useState<string | null>(null);
+
+  // Inline editing of price in licenses table
+  const [editingPriceKey, setEditingPriceKey] = useState<string | null>(null);
+  const [editingPriceVal, setEditingPriceVal] = useState<string>('');
+
+  // Interactive Time & Minute Rule Profit Tester State (for Timer Tab)
+  const [testRuleMinutes, setTestRuleMinutes] = useState<number>(60);
+  const [testRuleMode, setTestRuleMode] = useState<LicenseFeatureMode>('video_audio');
+  const [testRulePrice, setTestRulePrice] = useState<number>(180);
 
   // Edit / Assign Keys Modal for Existing License
   const [assigningLicense, setAssigningLicense] = useState<LicenseKeyItem | null>(null);
@@ -156,12 +167,25 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       newNotes,
       newFeatureMode,
       newAssignedVideoKeyId || null,
-      newAssignedVoiceKeyId || null
+      newAssignedVoiceKeyId || null,
+      newClientPrice
     );
     setGeneratedKeyResult(created.key);
     setNewClientName('');
     setNewNotes('');
+    setNewClientPrice(0);
     refreshAll();
+  };
+
+  const handleSaveInlinePrice = (key: string) => {
+    const val = parseFloat(editingPriceVal);
+    if (!isNaN(val) && val >= 0) {
+      LicenseService.updateLicensePrice(key, val);
+      setSaveSuccessMsg(`Updated selling price for key ${key}`);
+      setTimeout(() => setSaveSuccessMsg(null), 2000);
+      refreshAll();
+    }
+    setEditingPriceKey(null);
   };
 
   const handleCopy = (text: string) => {
@@ -455,7 +479,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
                     <form onSubmit={handleGenerateKey} className="space-y-3">
                       <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-                        <div className="sm:col-span-4">
+                        <div className="sm:col-span-3">
                           <label className="block text-[11px] text-slate-400 mb-1">Customer Name / Identifier</label>
                           <input
                             type="text"
@@ -491,7 +515,23 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           </div>
                         </div>
 
-                        <div className="sm:col-span-3">
+                        <div className="sm:col-span-2">
+                          <label className="block text-[11px] text-slate-400 mb-1 flex items-center gap-1">
+                            <DollarSign className="w-3 h-3 text-emerald-400" />
+                            <span>Selling Price ($)</span>
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="5"
+                            value={newClientPrice || ''}
+                            onChange={(e) => setNewClientPrice(parseFloat(e.target.value) || 0)}
+                            placeholder="e.g. 200"
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+
+                        <div className="sm:col-span-2">
                           <label className="block text-[11px] text-slate-400 mb-1">Plan Notes</label>
                           <input
                             type="text"
@@ -574,6 +614,86 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           </select>
                         </div>
                       </div>
+
+                      {/* Real-Time Usage Cost & Profit/Loss Check for this Rule */}
+                      {(() => {
+                        const analysis = BillingRateEngine.calculateRuleProfitability(
+                          isUnlimited ? 60 : newAllocatedMinutes,
+                          newFeatureMode,
+                          newClientPrice,
+                          newFeatureMode === 'video_only' ? timerConfig.videoOnlyRateMultiplier : timerConfig.clonedVoiceRateMultiplier,
+                          true
+                        );
+                        return (
+                          <div
+                            className={`p-3 rounded-xl border flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs transition-all ${
+                              analysis.status === 'profitable'
+                                ? 'bg-emerald-950/40 border-emerald-700/60 text-emerald-300'
+                                : analysis.status === 'loss'
+                                ? 'bg-rose-950/70 border-rose-600 text-rose-200'
+                                : 'bg-slate-900/90 border-slate-700 text-slate-300'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div
+                                className={`p-1.5 rounded-lg ${
+                                  analysis.status === 'profitable'
+                                    ? 'bg-emerald-600 text-white'
+                                    : analysis.status === 'loss'
+                                    ? 'bg-rose-600 text-white animate-bounce'
+                                    : 'bg-indigo-600 text-white'
+                                }`}
+                              >
+                                {analysis.status === 'loss' ? (
+                                  <AlertTriangle className="w-4 h-4" />
+                                ) : (
+                                  <TrendingUp className="w-4 h-4" />
+                                )}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-bold text-white">Rule API Cost:</span>
+                                  <span className="font-mono text-purple-300 font-bold">
+                                    ${analysis.totalRawApiCostUsd.toFixed(2)}
+                                  </span>
+                                  <span className="text-slate-600">|</span>
+                                  <span className="text-slate-400">Break-Even (0% Loss):</span>
+                                  <span className="font-mono text-amber-300 font-bold">
+                                    ${analysis.breakEvenPriceUsd.toFixed(2)}
+                                  </span>
+                                  <span className="text-slate-600">|</span>
+                                  <span className="text-slate-400">Real Calling Time:</span>
+                                  <span className="font-mono text-white font-semibold">
+                                    {analysis.realAllowedMinutes}m (at {analysis.timerMultiplier}x burn)
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-slate-400 mt-0.5">
+                                  fal.ai LUCY 2.5 ($2.40/min) &bull; ElevenLabs Voice ($0.15/min) &bull; WebRTC Relay ($0.006/min)
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              {analysis.status === 'profitable' && (
+                                <span className="px-3 py-1 rounded-full bg-emerald-900/90 border border-emerald-400 text-emerald-200 font-bold text-xs shadow-sm">
+                                  🟢 MAKING PROFIT (+${analysis.netProfitUsd.toFixed(2)} / +{analysis.profitMarginPercent}%)
+                                </span>
+                              )}
+                              {analysis.status === 'loss' && (
+                                <span className="px-3 py-1 rounded-full bg-rose-900 border border-rose-400 text-rose-100 font-bold text-xs flex items-center gap-1 shadow-sm">
+                                  <AlertTriangle className="w-3.5 h-3.5 text-yellow-300" />
+                                  <span>LOSING MONEY (-${analysis.lossAmountUsd.toFixed(2)} Loss)! Charge at least ${analysis.breakEvenPriceUsd.toFixed(2)}</span>
+                                </span>
+                              )}
+                              {analysis.status === 'unset' && (
+                                <span className="text-[11px] text-slate-400">
+                                  Recommended Minimum Retail: <strong className="text-white">${analysis.suggestedPriceUsd.toFixed(2)}</strong> (+{providerCosts.profitMarginPercent}% Margin)
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </form>
 
                     {/* Newly Generated Key Display */}
@@ -632,6 +752,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                             <th className="py-3 px-3">Bound PC (HWID)</th>
                             <th className="py-3 px-3">Status</th>
                             <th className="py-3 px-3">Minutes Left</th>
+                            <th className="py-3 px-3">API Cost & Profit</th>
                             <th className="py-3 px-4 text-right">Actions</th>
                           </tr>
                         </thead>
@@ -755,6 +876,88 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                       {lic.remainingMinutes.toFixed(1)}m
                                     </span>
                                   )}
+                                </td>
+
+                                {/* Financial & Profit/Loss Tracking */}
+                                <td className="py-3 px-3">
+                                  {(() => {
+                                    const fin = BillingRateEngine.calculateRuleProfitability(
+                                      lic.allocatedMinutes,
+                                      lic.featureMode,
+                                      lic.clientPriceChargedUsd || 0,
+                                      lic.featureMode === 'video_only'
+                                        ? timerConfig.videoOnlyRateMultiplier
+                                        : timerConfig.clonedVoiceRateMultiplier,
+                                      true
+                                    );
+                                    return (
+                                      <div className="space-y-1">
+                                        <div className="flex items-center gap-1 font-mono text-[10px]">
+                                          <span className="text-slate-400">API:</span>
+                                          <span className="text-purple-300 font-bold">${fin.totalRawApiCostUsd.toFixed(2)}</span>
+                                        </div>
+
+                                        {editingPriceKey === lic.key ? (
+                                          <div className="flex items-center gap-1">
+                                            <span className="text-slate-400 text-[10px]">$</span>
+                                            <input
+                                              type="number"
+                                              value={editingPriceVal}
+                                              onChange={(e) => setEditingPriceVal(e.target.value)}
+                                              placeholder="Price"
+                                              className="w-16 bg-slate-900 border border-indigo-500 rounded px-1.5 py-0.5 text-[10px] text-white font-mono"
+                                              autoFocus
+                                            />
+                                            <button
+                                              onClick={() => handleSaveInlinePrice(lic.key)}
+                                              className="p-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px]"
+                                              title="Save Price"
+                                            >
+                                              <Check className="w-3 h-3" />
+                                            </button>
+                                            <button
+                                              onClick={() => setEditingPriceKey(null)}
+                                              className="p-1 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-[10px]"
+                                              title="Cancel"
+                                            >
+                                              <X className="w-3 h-3" />
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <button
+                                              onClick={() => {
+                                                setEditingPriceKey(lic.key);
+                                                setEditingPriceVal((lic.clientPriceChargedUsd || 0).toString());
+                                              }}
+                                              className="font-mono text-[10px] text-indigo-300 hover:text-indigo-200 underline decoration-slate-600"
+                                              title="Click to edit selling price charged"
+                                            >
+                                              {lic.clientPriceChargedUsd
+                                                ? `$${lic.clientPriceChargedUsd.toFixed(2)}`
+                                                : '+ Price'}
+                                            </button>
+
+                                            {fin.status === 'profitable' && (
+                                              <span className="px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800 text-[9px] font-bold">
+                                                +${fin.netProfitUsd.toFixed(0)} ({fin.profitMarginPercent.toFixed(0)}%)
+                                              </span>
+                                            )}
+                                            {fin.status === 'loss' && (
+                                              <span className="px-1.5 py-0.5 rounded bg-rose-950/80 text-rose-300 border border-rose-800 text-[9px] font-bold animate-pulse">
+                                                -${fin.lossAmountUsd.toFixed(0)} Loss
+                                              </span>
+                                            )}
+                                            {fin.status === 'unset' && (
+                                              <span className="text-[9px] text-slate-500 font-mono">
+                                                (Min: ${fin.breakEvenPriceUsd.toFixed(0)})
+                                              </span>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
                                 </td>
 
                                 {/* Actions */}
@@ -1392,23 +1595,29 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
               {/* TAB 3: TIMER & MINUTE CONSUMPTION ENGINE */}
               {activeTab === 'timer' && (
-                <div className="max-w-2xl mx-auto space-y-6">
+                <div className="max-w-4xl mx-auto space-y-6">
+                  {/* Timer Rule Multipliers Card */}
                   <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-6 space-y-5">
-                    <div className="flex items-center gap-2 text-indigo-400 font-bold text-sm">
-                      <Clock className="w-5 h-5" />
-                      <span>How Call Minutes Run Down (Timer Consumption Rules)</span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-indigo-400 font-bold text-sm">
+                        <Clock className="w-5 h-5" />
+                        <span>How Call Minutes Run Down (Timer Consumption Rules)</span>
+                      </div>
+                      <span className="text-[11px] text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-2.5 py-1 rounded-full font-semibold">
+                        Real-Time Profit Protected
+                      </span>
                     </div>
 
                     <p className="text-xs text-slate-400 leading-relaxed">
-                      Configure how fast users consume minutes during live calls. This gives you full control over your server and GPU budget.
+                      Configure how fast users consume minutes during live calls. Your underlying API costs (fal.ai LUCY 2.5 @ $2.40/min and ElevenLabs STS @ $0.15/min) automatically synchronize with these rules to project whether you are making profit or losing money.
                     </p>
 
                     <div className="space-y-4 pt-2">
                       {/* Standard Video Multiplier */}
-                      <div className="space-y-1.5">
+                      <div className="space-y-1.5 bg-slate-900/60 p-3.5 rounded-xl border border-slate-800">
                         <div className="flex items-center justify-between text-xs">
                           <label className="font-semibold text-slate-200">
-                            Standard Video Transformation Burn Rate
+                            Standard Video Transformation Burn Rate (Natural Voice)
                           </label>
                           <span className="font-mono text-indigo-400 font-bold">
                             {timerConfig.videoOnlyRateMultiplier}x (1 real minute = {timerConfig.videoOnlyRateMultiplier} license min)
@@ -1428,13 +1637,19 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           }
                           className="w-full accent-indigo-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
                         />
+                        <div className="flex justify-between text-[10px] text-slate-500 font-mono">
+                          <span>0.5x (Relaxed)</span>
+                          <span>1.0x (1:1 Real Time)</span>
+                          <span>2.0x (Accelerated)</span>
+                          <span>3.0x (Aggressive)</span>
+                        </div>
                       </div>
 
                       {/* Cloned Voice + Video Multiplier */}
-                      <div className="space-y-1.5">
+                      <div className="space-y-1.5 bg-slate-900/60 p-3.5 rounded-xl border border-slate-800">
                         <div className="flex items-center justify-between text-xs">
                           <label className="font-semibold text-slate-200">
-                            Cloned Voice + Video High-Load Burn Rate
+                            Cloned Voice + Video High-Load Burn Rate (ElevenLabs STS Active)
                           </label>
                           <span className="font-mono text-indigo-400 font-bold">
                             {timerConfig.clonedVoiceRateMultiplier}x (1 real minute = {timerConfig.clonedVoiceRateMultiplier} license min)
@@ -1454,37 +1669,42 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           }
                           className="w-full accent-indigo-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
                         />
-                        <p className="text-[10px] text-slate-500">
-                          Because voice cloning consumes extra compute, you can charge 1.5x or 2x minutes when users enable real-time speech conversion.
+                        <div className="flex justify-between text-[10px] text-slate-500 font-mono">
+                          <span>1.0x (Standard)</span>
+                          <span>1.5x (Recommended: Covers Voice API)</span>
+                          <span>2.0x (Double Speed)</span>
+                          <span>4.0x (Premium)</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1">
+                          When users enable real-time voice cloning, increasing this multiplier burns minutes faster so their real-world call duration is shorter, protecting you against excessive ElevenLabs and fal.ai API usage charges.
                         </p>
                       </div>
 
-                      {/* Warning Threshold */}
-                      <div className="space-y-1.5 pt-2">
-                        <label className="block text-xs font-semibold text-slate-200">
-                          Low Minutes Warning Alert (Minutes)
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          max="30"
-                          value={timerConfig.warningThresholdMinutes}
-                          onChange={(e) =>
-                            setTimerConfig({
-                              ...timerConfig,
-                              warningThresholdMinutes: parseInt(e.target.value, 10) || 5,
-                            })
-                          }
-                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono"
-                        />
-                        <p className="text-[10px] text-slate-500">
-                          The client HUD will pulse yellow/red when remaining minutes fall below this threshold.
-                        </p>
-                      </div>
+                      {/* Warning Threshold & Cutoff */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                        <div className="space-y-1.5 bg-slate-900/60 p-3.5 rounded-xl border border-slate-800">
+                          <label className="block text-xs font-semibold text-slate-200">
+                            Low Minutes Warning Alert (Minutes)
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="30"
+                            value={timerConfig.warningThresholdMinutes}
+                            onChange={(e) =>
+                              setTimerConfig({
+                                ...timerConfig,
+                                warningThresholdMinutes: parseInt(e.target.value, 10) || 5,
+                              })
+                            }
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
+                          />
+                          <p className="text-[10px] text-slate-500">
+                            The client HUD pulses alert colors when remaining minutes reach this level.
+                          </p>
+                        </div>
 
-                      {/* Strict Cutoff Toggle */}
-                      <div className="pt-2">
-                        <label className="flex items-start gap-3 cursor-pointer bg-slate-900/60 p-3.5 rounded-xl border border-slate-800">
+                        <div className="bg-slate-900/60 p-3.5 rounded-xl border border-slate-800 flex items-start gap-3">
                           <input
                             type="checkbox"
                             checked={timerConfig.autoTerminateAtZero}
@@ -1494,15 +1714,15 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                 autoTerminateAtZero: e.target.checked,
                               })
                             }
-                            className="mt-0.5 rounded accent-indigo-600"
+                            className="mt-1 rounded accent-indigo-600 cursor-pointer"
                           />
                           <div>
                             <div className="text-xs font-semibold text-white">Strict Auto-Termination at 0 Minutes</div>
                             <div className="text-[11px] text-slate-400">
-                              Automatically cuts off the video camera and microphone feed as soon as the user's minutes reach zero.
+                              Cuts off the camera & microphone feed immediately when zero is reached so you never pay for unbilled minutes.
                             </div>
                           </div>
-                        </label>
+                        </div>
                       </div>
                     </div>
 
@@ -1513,6 +1733,253 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     >
                       Save Timer Consumption Rules
                     </button>
+                  </div>
+
+                  {/* INTERACTIVE RULE PROFIT & LOSS CHECKER */}
+                  <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-white font-bold text-sm">
+                        <Calculator className="w-5 h-5 text-emerald-400" />
+                        <span>Interactive Rule Profit & Loss Tester</span>
+                      </div>
+                      <span className="text-[10px] text-slate-400">
+                        Test ANY minute package and selling price against your configured rules
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+                      <div>
+                        <label className="block text-[11px] text-slate-300 font-semibold mb-1">
+                          Test License Minutes:
+                        </label>
+                        <select
+                          value={testRuleMinutes}
+                          onChange={(e) => setTestRuleMinutes(parseInt(e.target.value, 10))}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
+                        >
+                          <option value="15">15 Minutes Key</option>
+                          <option value="30">30 Minutes Key</option>
+                          <option value="60">60 Minutes Key (1 Hour)</option>
+                          <option value="120">120 Minutes Key (2 Hours)</option>
+                          <option value="180">180 Minutes Key (3 Hours)</option>
+                          <option value="300">300 Minutes Key (5 Hours)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] text-slate-300 font-semibold mb-1">
+                          Call Mode Under Test:
+                        </label>
+                        <select
+                          value={testRuleMode}
+                          onChange={(e) => setTestRuleMode(e.target.value as LicenseFeatureMode)}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                        >
+                          <option value="video_audio">Video Call + Audio Call (Lucy 2.5 + ElevenLabs)</option>
+                          <option value="audio_only">Audio Calls Only (ElevenLabs Voice Clone)</option>
+                          <option value="video_only">Video Calls Only (Lucy 2.5 + Natural Audio)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] text-slate-300 font-semibold mb-1 flex items-center gap-1">
+                          <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Planned Retail Price to Charge ($):</span>
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="5"
+                          value={testRulePrice}
+                          onChange={(e) => setTestRulePrice(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* LIVE VERDICT CARD */}
+                    {(() => {
+                      const effectiveMult =
+                        testRuleMode === 'video_only'
+                          ? timerConfig.videoOnlyRateMultiplier
+                          : timerConfig.clonedVoiceRateMultiplier;
+                      const analysis = BillingRateEngine.calculateRuleProfitability(
+                        testRuleMinutes,
+                        testRuleMode,
+                        testRulePrice,
+                        effectiveMult,
+                        true
+                      );
+
+                      return (
+                        <div
+                          className={`p-4 rounded-2xl border transition-all space-y-3 ${
+                            analysis.status === 'profitable'
+                              ? 'bg-emerald-950/50 border-emerald-700/80 text-emerald-200'
+                              : analysis.status === 'loss'
+                              ? 'bg-rose-950/70 border-rose-600 text-rose-100 animate-pulse'
+                              : 'bg-slate-900 border-slate-700 text-slate-300'
+                          }`}
+                        >
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <div
+                                className={`p-2 rounded-xl ${
+                                  analysis.status === 'profitable'
+                                    ? 'bg-emerald-600 text-white'
+                                    : analysis.status === 'loss'
+                                    ? 'bg-rose-600 text-white'
+                                    : 'bg-indigo-600 text-white'
+                                }`}
+                              >
+                                {analysis.status === 'loss' ? (
+                                  <AlertTriangle className="w-5 h-5" />
+                                ) : (
+                                  <TrendingUp className="w-5 h-5" />
+                                )}
+                              </div>
+                              <div>
+                                <span className="text-[11px] font-semibold uppercase tracking-wider block opacity-80">
+                                  Rule Financial Verdict
+                                </span>
+                                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                                  {analysis.status === 'profitable' && (
+                                    <span className="text-emerald-300">
+                                      🟢 MAKING PROFIT (+${analysis.netProfitUsd.toFixed(2)} Net Profit)
+                                    </span>
+                                  )}
+                                  {analysis.status === 'loss' && (
+                                    <span className="text-rose-300">
+                                      🔴 LOSING MONEY (-${analysis.lossAmountUsd.toFixed(2)} Net Loss)!
+                                    </span>
+                                  )}
+                                  {analysis.status === 'breakeven' && (
+                                    <span className="text-amber-300">🟡 BREAK-EVEN (Zero Profit / Zero Loss)</span>
+                                  )}
+                                  {analysis.status === 'unset' && (
+                                    <span className="text-slate-300">Enter a price to evaluate profit or loss</span>
+                                  )}
+                                </h4>
+                              </div>
+                            </div>
+
+                            <div className="text-right">
+                              {analysis.status === 'profitable' && (
+                                <span className="px-3 py-1 rounded-full bg-emerald-900 border border-emerald-400 font-bold text-xs text-emerald-200">
+                                  +{analysis.profitMarginPercent}% Margin
+                                </span>
+                              )}
+                              {analysis.status === 'loss' && (
+                                <span className="px-3 py-1 rounded-full bg-rose-900 border border-rose-400 font-bold text-xs text-rose-100">
+                                  DEFICIT: Need ${analysis.breakEvenPriceUsd.toFixed(2)} Min
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Detailed Financial Breakdown for this Rule */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800/80 text-xs">
+                            <div className="bg-slate-900/80 p-2.5 rounded-lg">
+                              <span className="text-[10px] text-slate-400 block">Rule Burn Rate</span>
+                              <span className="font-mono font-bold text-indigo-300">{effectiveMult}x Speed</span>
+                              <span className="text-[9px] text-slate-500 block">
+                                = {analysis.realAllowedMinutes}m real call
+                              </span>
+                            </div>
+
+                            <div className="bg-slate-900/80 p-2.5 rounded-lg">
+                              <span className="text-[10px] text-slate-400 block">Total API Usage Cost</span>
+                              <span className="font-mono font-bold text-purple-300">
+                                ${analysis.totalRawApiCostUsd.toFixed(2)}
+                              </span>
+                              <span className="text-[9px] text-slate-500 block">fal.ai + ElevenLabs</span>
+                            </div>
+
+                            <div className="bg-slate-900/80 p-2.5 rounded-lg">
+                              <span className="text-[10px] text-slate-400 block">Break-Even Minimum</span>
+                              <span className="font-mono font-bold text-amber-300">
+                                ${analysis.breakEvenPriceUsd.toFixed(2)}
+                              </span>
+                              <span className="text-[9px] text-slate-500 block">Must charge at least this</span>
+                            </div>
+
+                            <div className="bg-slate-900/80 p-2.5 rounded-lg">
+                              <span className="text-[10px] text-slate-400 block">Recommended Price (+{providerCosts.profitMarginPercent}%)</span>
+                              <span className="font-mono font-bold text-emerald-400">
+                                ${analysis.suggestedPriceUsd.toFixed(2)}
+                              </span>
+                              <span className="text-[9px] text-slate-500 block">Guarantees safe margin</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* MASTER TIME & MINUTE RULES PROFIT MATRIX */}
+                  <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-white font-bold text-sm">
+                        <Layers className="w-5 h-5 text-indigo-400" />
+                        <span>Live Minute Rules & Pricing Matrix (Under Current Active Rules)</span>
+                      </div>
+                      <span className="text-[10px] text-slate-400">
+                        Updated in real-time as you move the burn rate sliders above
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-slate-900/90 border-b border-slate-800 text-[11px] text-slate-400">
+                            <th className="py-2.5 px-3">Plan Package</th>
+                            <th className="py-2.5 px-3">Active Burn Rate</th>
+                            <th className="py-2.5 px-3">Real Calling Time</th>
+                            <th className="py-2.5 px-3">API Operating Cost</th>
+                            <th className="py-2.5 px-3">Break-Even Price</th>
+                            <th className="py-2.5 px-3">Recommended Retail (+{providerCosts.profitMarginPercent}%)</th>
+                            <th className="py-2.5 px-3 text-right">Net Owner Profit</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 font-mono">
+                          {[15, 30, 60, 120, 300].map((mins) => {
+                            const analysis = BillingRateEngine.calculateRuleProfitability(
+                              mins,
+                              'video_audio',
+                              0,
+                              timerConfig.clonedVoiceRateMultiplier,
+                              true
+                            );
+                            const netProfit = +(analysis.suggestedPriceUsd - analysis.totalRawApiCostUsd).toFixed(2);
+                            return (
+                              <tr key={mins} className="hover:bg-slate-900/50 transition-colors">
+                                <td className="py-2.5 px-3 font-bold text-white font-sans">
+                                  {mins} Minutes Package
+                                </td>
+                                <td className="py-2.5 px-3 text-indigo-300">
+                                  {timerConfig.clonedVoiceRateMultiplier}x Multiplier
+                                </td>
+                                <td className="py-2.5 px-3 text-slate-300">
+                                  {analysis.realAllowedMinutes} real mins
+                                </td>
+                                <td className="py-2.5 px-3 text-purple-300 font-bold">
+                                  ${analysis.totalRawApiCostUsd.toFixed(2)}
+                                </td>
+                                <td className="py-2.5 px-3 text-amber-300 font-bold">
+                                  ${analysis.breakEvenPriceUsd.toFixed(2)}
+                                </td>
+                                <td className="py-2.5 px-3 text-white font-bold">
+                                  ${analysis.suggestedPriceUsd.toFixed(2)}
+                                </td>
+                                <td className="py-2.5 px-3 text-right text-emerald-400 font-bold">
+                                  +${netProfit.toFixed(2)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
               )}

@@ -54,33 +54,30 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         with:
-          tag_name: v1.2.2
-          name: "RICH X CAM LIVE v1.2.2 — Windows Setup Installer (.exe)"
+          tag_name: v1.2.3
+          name: "RICH X CAM LIVE v1.2.3 — Windows Setup & Portable (.exe)"
           draft: false
           prerelease: false
           generate_release_notes: true
           body: |
-            # RICH X CAM LIVE v1.2.2 for Windows 10 & 11
+            # RICH X CAM LIVE v1.2.3 for Windows 10 & 11
 
-            ### 🚀 Direct Windows Download:
-            - **Standard Windows Setup Wizard**: `RICH-X-CAM-LIVE-Setup-1.2.2.exe`
+            ### 🚀 Direct Windows Downloads:
+            - **Portable Standalone (.exe)** *(No installation required, click & run)*:
+              **`RICH-X-CAM-LIVE-Portable-1.2.3.exe`**
+            - **Standard Windows Setup Wizard (.exe)**:
+              **`RICH-X-CAM-LIVE-Setup-1.2.3.exe`**
 
-            ### 🛠️ Critical Fix: Realtime Call Start & Resilient fal.ai Gateway
-            - **Resolved "Call failed: the built-in API server is not reachable / Failed to execute fetch on Window"**:
-              - Added native Electron IPC gateway (`fal-token`, `fal-upload-image`, `fal-status`) running directly inside the desktop main process.
-              - Eliminates reliance on loopback HTTP port binding, antivirus blocking of child Node processes, CORS issues, and `file://` protocol relative URL resolution failures.
-              - Multi-tier `FalGateway` with automatic fail-safe fallback: Electron IPC -> Local server proxy -> Direct official fal.ai CORS client gateway.
-              - Server loopback bound to `127.0.0.1` instead of `0.0.0.0` to eliminate Windows Defender Firewall prompts.
-              - Resilient preflight check that validates credential availability without throwing raw fetch parse exceptions.
-
-            ### 🎥 Native Virtual Camera ("RICHX CAM") & Audio ("RICHX MIC"):
-            - DirectShow Virtual Camera Filter Bundled in `drivers/virtual-camera/`.
-            - Registers `RICHX CAM` directly as a native video capture device in Windows for WhatsApp Desktop, Zoom, Microsoft Teams, Discord, Google Meet, and Skype.
-            - Offline `VBCABLE_Driver_Pack43` setup in `drivers/virtual-audio/` with silent registration.
-
-            ### ⚡ Included Features:
-            - Official fal.ai LUCY 2.5 Realtime WebRTC WebSocket signaling relay.
-            - Dual-field inputs for Key ID and Key Secret with Show/Hide toggle and auto-split paste detection.
+            ### 🛠️ Key Fixes in v1.2.3:
+            1. **NSIS Installer Auto-Process Termination**:
+               - Added custom NSIS installer hook (`build/installer.nsh`) that automatically force-closes lingering background process trees so the installer never gets stuck with the *"cannot be closed"* prompt.
+               - Added portable standalone target (`RICH-X-CAM-LIVE-Portable-1.2.3.exe`) that runs directly without installation.
+            2. **Clean Process Tree Termination on Windows**:
+               - Updated desktop backend child process cleanup using Windows native taskkill tree termination, preventing orphaned background processes.
+            3. **Native Desktop Electron IPC Gateway (v1.2.2)**:
+               - Eliminates localhost `file://` fetch parsing errors and Windows firewall port blocking.
+            4. **Virtual Camera & Virtual Microphone Drivers**:
+               - Bundled native DirectShow Virtual Camera filter (`RICHX CAM`) and Virtual Audio cable (`RICHX MIC`) with registration scripts.
           files: |
             release/*.exe
         env:

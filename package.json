@@ -1,7 +1,7 @@
 {
   "name": "rich-x-cam-live",
   "private": true,
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "RICH X CAM LIVE — Real-Time Video Transformation and Voice Conversion Studio",
   "main": "electron/main.cjs",
   "type": "module",
@@ -45,6 +45,12 @@
           "arch": [
             "x64"
           ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "public/icon.ico",
@@ -61,7 +67,11 @@
       "installerIcon": "public/icon.ico",
       "uninstallerIcon": "public/icon.ico",
       "installerHeaderIcon": "public/icon.ico",
-      "runAfterFinish": true
+      "runAfterFinish": true,
+      "include": "electron/installer.nsh"
+    },
+    "portable": {
+      "artifactName": "RICH-X-CAM-LIVE-Portable-${version}.${ext}"
     }
   },
   "dependencies": {

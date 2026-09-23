@@ -441,11 +441,19 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.on('will-quit', () => {
-  if (apiServerProc) {
-    try {
-      apiServerProc.kill();
-    } catch {}
-    apiServerProc = null;
-  }
-});
+function cleanupApiServer() {
+  if (!apiServerProc) return;
+  try {
+    if (process.platform === 'win32' && apiServerProc.pid) {
+      const { execSync } = require('child_process');
+      execSync(`taskkill /F /PID ${apiServerProc.pid} /T`, { stdio: 'ignore' });
+    } else {
+      apiServerProc.kill('SIGKILL');
+    }
+  } catch {}
+  apiServerProc = null;
+}
+
+app.on('before-quit', cleanupApiServer);
+app.on('will-quit', cleanupApiServer);
+process.on('exit', cleanupApiServer);

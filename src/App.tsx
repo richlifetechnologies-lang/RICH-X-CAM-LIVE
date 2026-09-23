@@ -52,6 +52,8 @@ import { ProductKeyActivationModal } from './components/ProductKeyActivationModa
 import { AdminDashboardModal } from './components/AdminDashboardModal';
 import { AvatarReferenceUploader } from './components/AvatarReferenceUploader';
 import { RichXRealtimeVideoEngine } from './components/RichXRealtimeVideoEngine';
+import { QuickAccessControlSuite } from './components/QuickAccessControlSuite';
+import { UniversalLipSyncCalibration } from './components/UniversalLipSyncCalibration';
 import { LicenseService } from './services/licensing/LicenseService';
 import { LicenseKeyItem, SessionFinancials } from './types/licensing';
 import { BillingRateEngine } from './services/billing/BillingRateEngine';
@@ -858,7 +860,6 @@ export default function App() {
                 onCameraChange={handleCameraChange}
                 availableCameras={availableCameras}
                 referenceImageUrl={config.referenceImageUrl}
-                onImageChange={handleUpdateReferenceImage}
                 videoOrientation={config.videoOrientation}
                 onOrientationChange={handleOrientationChange}
                 isCallActive={isCallActive}
@@ -867,8 +868,6 @@ export default function App() {
                 callStatus={callStatus}
                 videoDisplayRef={videoDisplayRef}
                 isAllowed={isVideoAudioAllowed}
-                videoPrompt={config.videoPrompt}
-                onPromptChange={handleUpdatePrompt}
               />
 
               {/* STOP BUTTON (Beneath user window, ON TOP of microphone selector) */}
@@ -933,199 +932,59 @@ export default function App() {
                 clonedVoiceName={currentActiveVoice?.name}
                 autoCalibrationActive={config.autoLipSyncCalibration}
               />
-
-              {/* Audio Timing Buffer / Auto Lip-Sync Calibration */}
-              <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className={`p-1.5 rounded-lg ${config.autoLipSyncCalibration ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-800 text-slate-400'}`}>
-                      <Zap className={`w-4 h-4 ${config.autoLipSyncCalibration && isCallActive ? 'animate-bounce' : ''}`} />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-white">Auto Lip-Sync Calibration</span>
-                        <span
-                          className={`text-[9px] font-mono px-1.5 py-0.2 rounded font-bold uppercase ${
-                            config.autoLipSyncCalibration
-                              ? 'bg-amber-950 text-amber-300 border border-amber-800'
-                              : 'bg-slate-800 text-slate-400 border border-slate-700'
-                          }`}
-                        >
-                          {config.autoLipSyncCalibration ? 'AUTO-SYNC ACTIVE' : 'MANUAL'}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-slate-400">
-                        Automatically calibrates audio delay to match video render frames in real time when speaking.
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const updated = { ...config, autoLipSyncCalibration: !config.autoLipSyncCalibration };
-                      setConfig(updated);
-                      CloudCallStore.saveConfig(updated);
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                      config.autoLipSyncCalibration
-                        ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-sm'
-                        : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                    }`}
-                  >
-                    {config.autoLipSyncCalibration ? 'Auto Enabled' : 'Enable Auto'}
-                  </button>
-                </div>
-
-                {config.autoLipSyncCalibration ? (
-                  <div className="bg-slate-950/80 p-2.5 rounded-lg border border-slate-800 flex items-center justify-between text-xs">
-                    <span className="text-slate-300 flex items-center gap-1.5 text-[11px]">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      Dynamic Video-Audio Alignment:
-                    </span>
-                    <span className="font-mono text-amber-300 font-bold text-xs">
-                      {lipSyncMetrics?.isSpeaking
-                        ? (config.voiceMode === 'cloned_voice' ? '~40 ms (Cloned Voice Speaking)' : '~165 ms (Active Speaking)')
-                        : (config.voiceMode === 'cloned_voice' ? '~35 ms (Cloned Standby)' : '~155 ms (Standby Anchor)')}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="space-y-1.5 pt-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-white flex items-center gap-1.5">
-                        <Sliders className="w-3.5 h-3.5 text-sky-400" />
-                        Manual Timing Buffer
-                      </span>
-                      <span className="font-mono text-slate-300 font-semibold">{config.audioLatencyCompensationMs} ms delay</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="350"
-                      step="10"
-                      value={config.audioLatencyCompensationMs}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value, 10);
-                        const updated = { ...config, audioLatencyCompensationMs: val };
-                        setConfig(updated);
-                        CloudCallStore.saveConfig(updated);
-                      }}
-                      className="w-full accent-sky-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
-                    />
-                  </div>
-                )}
-                <p className="text-[11px] text-slate-400">
-                  Matches avatar/video mouth movements with what listeners hear in WhatsApp, Telegram, Zoom, or Discord.
-                </p>
-              </div>
             </div>
 
-            {/* Right Column: Voice Selection, Voice Cloning & Upload Section (5 Cols) */}
+            {/* Right Column: Image Upload, Lip-Sync, Quick Controls Suite & Audio Routing (5 Cols) */}
             <div className="lg:col-span-5 space-y-4">
-              {/* Voice Source Switcher: Natural Voice vs Cloned Voice */}
-              <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-semibold text-white">Call Voice Input Option:</label>
-                  <span className="text-[10px] text-slate-400">Switch anytime as needed</span>
-                </div>
+              {/* SIDE-BY-SIDE UPPER SECTION: Compact Image Upload & Universal Lip Sync Calibration */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <AvatarReferenceUploader
+                  referenceImageUrl={config.referenceImageUrl}
+                  onImageChange={handleUpdateReferenceImage}
+                  isCallActive={isCallActive}
+                  compact={true}
+                />
 
-                <div className="grid grid-cols-2 gap-2.5">
-                  {/* Option A: Natural Voice */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const updated = { ...config, voiceMode: 'natural_mic' as const };
-                      setConfig(updated);
-                      CloudCallStore.saveConfig(updated);
-                    }}
-                    className={`p-3 rounded-xl border text-left transition-all ${
-                      config.voiceMode === 'natural_mic'
-                        ? 'bg-sky-950/80 border-sky-500 text-white shadow-md ring-1 ring-sky-500/30'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between font-semibold text-xs text-white mb-1">
-                      <div className="flex items-center gap-1.5">
-                        <UserCheck className="w-3.5 h-3.5 text-sky-400" />
-                        <span>Natural Voice</span>
-                      </div>
-                      {config.voiceMode === 'natural_mic' && <Check className="w-3.5 h-3.5 text-sky-400" />}
-                    </div>
-                    <div className="text-[10px] text-slate-400 leading-tight">
-                      Uses selected natural microphone with aligned lip-sync.
-                    </div>
-                  </button>
-
-                  {/* Option B: Cloned Voice */}
-                  <button
-                    type="button"
-                    disabled={isVoiceCloneLocked}
-                    onClick={() => {
-                      const updated = { ...config, voiceMode: 'cloned_voice' as const };
-                      setConfig(updated);
-                      CloudCallStore.saveConfig(updated);
-                    }}
-                    className={`p-3 rounded-xl border text-left transition-all ${
-                      isVoiceCloneLocked
-                        ? 'opacity-40 cursor-not-allowed bg-slate-950 border-slate-800'
-                        : config.voiceMode === 'cloned_voice'
-                        ? 'bg-indigo-950/80 border-indigo-500 text-white shadow-md ring-1 ring-indigo-500/30'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between font-semibold text-xs text-white mb-1">
-                      <div className="flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                        <span>Cloned Voice</span>
-                      </div>
-                      {config.voiceMode === 'cloned_voice' && <Check className="w-3.5 h-3.5 text-indigo-400" />}
-                    </div>
-                    <div className="text-[10px] text-slate-400 leading-tight">
-                      Real-time AI voice conversion & custom cloned profiles.
-                    </div>
-                  </button>
-                </div>
-              </div>
-
-              {/* Natural Voice Info or Voice Cloning Section */}
-              {config.voiceMode === 'natural_mic' ? (
-                <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 text-xs text-slate-300 space-y-2.5">
-                  <div className="flex items-center gap-2 font-semibold text-sky-300">
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Natural Voice Active for Video & Audio Call</span>
-                  </div>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">
-                    Microphone <strong>{currentMicName}</strong> captures your real voice directly. The audio is routed through the timing buffer to drive lip-sync mouth movements on video and stream into your calling apps.
-                  </p>
-                  <div className="p-2.5 bg-slate-950/80 rounded-lg border border-slate-800 flex items-center justify-between">
-                    <span className="text-[11px] text-slate-400">Want to use an AI voice instead?</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const updated = { ...config, voiceMode: 'cloned_voice' as const };
-                        setConfig(updated);
-                        CloudCallStore.saveConfig(updated);
-                      }}
-                      className="px-2.5 py-1 rounded bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 text-xs font-semibold transition-colors"
-                    >
-                      Switch to Cloned Voice
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                /* Voice Cloning & Voice Upload Section */
-                <VoiceCloningSection
-                  voices={voices}
-                  activeVoiceId={config.activeVoiceId}
-                  voiceEngineApiKey={effectiveKeys.voiceKey || config.voiceEngineApiKey}
-                  onSelectVoice={(id) => {
-                    const updated = { ...config, activeVoiceId: id };
+                <UniversalLipSyncCalibration
+                  autoCalibrationActive={config.autoLipSyncCalibration}
+                  onToggleAuto={() => {
+                    const updated = { ...config, autoLipSyncCalibration: !config.autoLipSyncCalibration };
                     setConfig(updated);
                     CloudCallStore.saveConfig(updated);
                   }}
-                  onVoiceAdded={handleVoiceAdded}
-                  onVoiceDeleted={handleVoiceDeleted}
+                  audioLatencyCompensationMs={config.audioLatencyCompensationMs}
+                  onChangeLatency={(val) => {
+                    const updated = { ...config, audioLatencyCompensationMs: val };
+                    setConfig(updated);
+                    CloudCallStore.saveConfig(updated);
+                  }}
+                  metrics={lipSyncMetrics}
+                  isCallActive={isCallActive}
+                  callMode="video_audio"
+                  voiceMode={config.voiceMode}
+                  accentColor="amber"
                 />
-              )}
+              </div>
+
+              {/* QUICK CONTROLS DIRECTLY BELOW IMAGE UPLOAD SECTION */}
+              {/* (Camera Selector, Audio Pipelining, Voice Clone) */}
+              <QuickAccessControlSuite
+                config={config}
+                onUpdateConfig={(partial) => {
+                  const updated = { ...config, ...partial };
+                  setConfig(updated);
+                  CloudCallStore.saveConfig(updated);
+                }}
+                availableCameras={availableCameras}
+                isCallActive={isCallActive}
+                voices={voices}
+                voiceEngineApiKey={effectiveKeys.voiceKey || config.voiceEngineApiKey}
+                isVoiceCloneLocked={isVoiceCloneLocked}
+                onVoiceAdded={handleVoiceAdded}
+                onVoiceDeleted={handleVoiceDeleted}
+                onOpenGuide={() => setIsGuideOpen(true)}
+                accentColor="purple"
+              />
 
               {/* Output Audio Virtual Cable Endpoint */}
               <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-3">
@@ -1137,7 +996,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setIsGuideOpen(true)}
-                    className="text-[10px] text-indigo-400 hover:underline"
+                    className="text-[10px] text-indigo-400 hover:underline cursor-pointer"
                   >
                     App Setup Guide
                   </button>
@@ -1572,7 +1431,6 @@ export default function App() {
                 onCameraChange={handleCameraChange}
                 availableCameras={availableCameras}
                 referenceImageUrl={config.referenceImageUrl}
-                onImageChange={handleUpdateReferenceImage}
                 videoOrientation={config.videoOrientation}
                 onOrientationChange={handleOrientationChange}
                 isCallActive={isCallActive}
@@ -1581,8 +1439,6 @@ export default function App() {
                 callStatus={callStatus}
                 videoDisplayRef={videoDisplayRef}
                 isAllowed={isVideoOnlyAllowed}
-                videoPrompt={config.videoPrompt}
-                onPromptChange={handleUpdatePrompt}
               />
 
               {/* STOP BUTTON (Beneath user window, ON TOP of microphone selector) */}
@@ -1647,125 +1503,59 @@ export default function App() {
                 clonedVoiceName={config.videoOnlyEnableVoiceCloning ? currentActiveVoice?.name : undefined}
                 autoCalibrationActive={config.autoLipSyncCalibration}
               />
-
-              {/* Audio Timing Buffer / Auto Lip-Sync Calibration */}
-              <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className={`p-1.5 rounded-lg ${config.autoLipSyncCalibration ? 'bg-purple-500/20 text-purple-400' : 'bg-slate-800 text-slate-400'}`}>
-                      <Zap className={`w-4 h-4 ${config.autoLipSyncCalibration && isCallActive ? 'animate-bounce' : ''}`} />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-white">Auto Lip-Sync Calibration</span>
-                        <span
-                          className={`text-[9px] font-mono px-1.5 py-0.2 rounded font-bold uppercase ${
-                            config.autoLipSyncCalibration
-                              ? 'bg-purple-950 text-purple-300 border border-purple-800'
-                              : 'bg-slate-800 text-slate-400 border border-slate-700'
-                          }`}
-                        >
-                          {config.autoLipSyncCalibration ? 'AUTO-SYNC ACTIVE' : 'MANUAL'}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-slate-400">
-                        Automatically matches mouth movements to video frame latency when speaking.
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const updated = { ...config, autoLipSyncCalibration: !config.autoLipSyncCalibration };
-                      setConfig(updated);
-                      CloudCallStore.saveConfig(updated);
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                      config.autoLipSyncCalibration
-                        ? 'bg-purple-600 hover:bg-purple-500 text-white shadow-sm'
-                        : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                    }`}
-                  >
-                    {config.autoLipSyncCalibration ? 'Auto Enabled' : 'Enable Auto'}
-                  </button>
-                </div>
-
-                {config.autoLipSyncCalibration ? (
-                  <div className="bg-slate-950/80 p-2.5 rounded-lg border border-slate-800 flex items-center justify-between text-xs">
-                    <span className="text-slate-300 flex items-center gap-1.5 text-[11px]">
-                      <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
-                      Dynamic Video-Audio Alignment:
-                    </span>
-                    <span className="font-mono text-purple-300 font-bold text-xs">
-                      {lipSyncMetrics?.isSpeaking ? '~165 ms (Active Speaking)' : '~155 ms (Standby Anchor)'}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="space-y-1.5 pt-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-white flex items-center gap-1.5">
-                        <Sliders className="w-3.5 h-3.5 text-purple-400" />
-                        Manual Lip-Sync Alignment
-                      </span>
-                      <span className="font-mono text-slate-300 font-semibold">{config.audioLatencyCompensationMs} ms delay</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="350"
-                      step="10"
-                      value={config.audioLatencyCompensationMs}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value, 10);
-                        const updated = { ...config, audioLatencyCompensationMs: val };
-                        setConfig(updated);
-                        CloudCallStore.saveConfig(updated);
-                      }}
-                      className="w-full accent-purple-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
-                    />
-                  </div>
-                )}
-                <p className="text-[11px] text-slate-400">
-                  Aligns mouth aperture timing with your natural microphone input in real-time.
-                </p>
-              </div>
             </div>
 
-            {/* Right Column: Video Only Hardware & Detected Mic Selector (5 Cols) */}
+            {/* Right Column: Image Upload, Lip-Sync, Quick Controls Suite & Audio Routing (5 Cols) */}
             <div className="lg:col-span-5 space-y-4">
-              {/* STOP BUTTON (On top of camera and microphone selectors) */}
-              <StopServiceButton
-                isCallActive={isCallActive}
-                onStop={handleStopService}
-                disabled={!isVideoOnlyAllowed && !isCallActive}
-                label="STOP VIDEO SERVICE"
-                subtext="Halt video streaming and wallet timer."
-              />
+              {/* SIDE-BY-SIDE UPPER SECTION: Compact Image Upload & Universal Lip Sync Calibration */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <AvatarReferenceUploader
+                  referenceImageUrl={config.referenceImageUrl}
+                  onImageChange={handleUpdateReferenceImage}
+                  isCallActive={isCallActive}
+                  compact={true}
+                />
 
-              {/* Webcam Device Selection */}
-              <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-2">
-                <label className="block text-xs font-semibold text-white flex items-center gap-1.5">
-                  <Camera className="w-4 h-4 text-purple-400" />
-                  <span>Physical Webcam Device</span>
-                </label>
-                <select
-                  value={config.selectedCameraId}
-                  onChange={(e) => {
-                    const updated = { ...config, selectedCameraId: e.target.value };
+                <UniversalLipSyncCalibration
+                  autoCalibrationActive={config.autoLipSyncCalibration}
+                  onToggleAuto={() => {
+                    const updated = { ...config, autoLipSyncCalibration: !config.autoLipSyncCalibration };
                     setConfig(updated);
                     CloudCallStore.saveConfig(updated);
                   }}
-                  disabled={isCallActive}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500"
-                >
-                  <option value="default">Default Physical Webcam</option>
-                  {availableCameras.map((c) => (
-                    <option key={c.deviceId} value={c.deviceId}>
-                      {c.label || `Camera (${c.deviceId.slice(0, 6)})`}
-                    </option>
-                  ))}
-                </select>
+                  audioLatencyCompensationMs={config.audioLatencyCompensationMs}
+                  onChangeLatency={(val) => {
+                    const updated = { ...config, audioLatencyCompensationMs: val };
+                    setConfig(updated);
+                    CloudCallStore.saveConfig(updated);
+                  }}
+                  metrics={lipSyncMetrics}
+                  isCallActive={isCallActive}
+                  callMode="video_only"
+                  voiceMode={config.videoOnlyEnableVoiceCloning ? 'cloned_voice' : 'natural_mic'}
+                  accentColor="purple"
+                />
               </div>
+
+              {/* QUICK CONTROLS DIRECTLY BELOW IMAGE UPLOAD SECTION */}
+              {/* (Camera Selector, Audio Pipelining, Voice Clone) */}
+              <QuickAccessControlSuite
+                config={config}
+                onUpdateConfig={(partial) => {
+                  const updated = { ...config, ...partial };
+                  setConfig(updated);
+                  CloudCallStore.saveConfig(updated);
+                }}
+                availableCameras={availableCameras}
+                isCallActive={isCallActive}
+                voices={voices}
+                voiceEngineApiKey={effectiveKeys.voiceKey || config.voiceEngineApiKey}
+                isVoiceCloneLocked={isVoiceCloneLocked}
+                onVoiceAdded={handleVoiceAdded}
+                onVoiceDeleted={handleVoiceDeleted}
+                onOpenGuide={() => setIsGuideOpen(true)}
+                accentColor="purple"
+              />
 
               {/* PROMINENT DETECTED MICROPHONE SELECTOR (Requirement for Video Calls Only) */}
               <div className="bg-slate-900/90 border border-purple-500/40 rounded-xl p-4 space-y-3 shadow-md ring-1 ring-purple-500/20">
@@ -1820,63 +1610,6 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-              </div>
-
-              {/* Natural Voice Default & Optional Voice Cloning Toggle */}
-              <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <UserCheck className="w-4 h-4 text-emerald-400" />
-                    <div>
-                      <h4 className="text-xs font-semibold text-white">Default: Natural Microphone Voice</h4>
-                      <p className="text-[10px] text-slate-400">Uses your real voice with zero cloud AI voice overhead.</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Optional Voice Cloning Toggle */}
-                <div className="pt-2 border-t border-slate-800">
-                  <label className="flex items-center justify-between cursor-pointer p-2 rounded-lg hover:bg-slate-950/60 transition-colors">
-                    <div className="space-y-0.5">
-                      <span className="text-xs font-medium text-slate-200 flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                        Enable Voice Cloning (Optional)
-                      </span>
-                      <span className="text-[10px] text-slate-400 block">
-                        Voice cloning is not required for Video Only mode unless specifically enabled.
-                      </span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(config.videoOnlyEnableVoiceCloning)}
-                      disabled={isVoiceCloneLocked || isCallActive}
-                      onChange={(e) => {
-                        const updated = { ...config, videoOnlyEnableVoiceCloning: e.target.checked };
-                        setConfig(updated);
-                        CloudCallStore.saveConfig(updated);
-                      }}
-                      className="w-4 h-4 rounded border-slate-700 text-purple-600 focus:ring-0 bg-slate-950 cursor-pointer"
-                    />
-                  </label>
-                </div>
-
-                {/* Optional Voice Cloning Section if user explicitly turned it on */}
-                {config.videoOnlyEnableVoiceCloning && !isVoiceCloneLocked && (
-                  <div className="pt-2">
-                    <VoiceCloningSection
-                      voices={voices}
-                      activeVoiceId={config.activeVoiceId}
-                      voiceEngineApiKey={effectiveKeys.voiceKey || config.voiceEngineApiKey}
-                      onSelectVoice={(id) => {
-                        const updated = { ...config, activeVoiceId: id };
-                        setConfig(updated);
-                        CloudCallStore.saveConfig(updated);
-                      }}
-                      onVoiceAdded={handleVoiceAdded}
-                      onVoiceDeleted={handleVoiceDeleted}
-                    />
-                  </div>
-                )}
               </div>
 
               {/* Output Audio Endpoint */}

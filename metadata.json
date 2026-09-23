@@ -1,0 +1,6 @@
+{
+  "name": "LiveVoice AI - Real-Time Voice Conversion Studio",
+  "description": "Cloud-powered real-time voice conversion desktop application and audio routing controller for Windows virtual microphone.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

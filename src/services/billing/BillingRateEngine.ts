@@ -219,22 +219,35 @@ export class BillingRateEngine {
   public static getMinuteConsumptionMultiplier(
     mode: StudioCallMode,
     isClonedVoice: boolean,
-    assignedFeatureMode?: string
+    assignedFeatureMode?: string,
+    timerConfig?: {
+      videoOnlyRateMultiplier?: number;
+      clonedVoiceRateMultiplier?: number;
+      audioOnlyRateMultiplier?: number;
+    }
   ): number {
-    // If the key is specifically bound to a single mode (e.g. audio_only key or video_audio key),
-    // 1 minute on that key corresponds to 1 real minute of that feature:
-    if (assignedFeatureMode === mode) {
-      return 1.0;
+    if (mode === 'audio_only') {
+      const audioRate = timerConfig?.audioOnlyRateMultiplier ?? 1.0;
+      if (isClonedVoice) {
+        const voiceMult = timerConfig?.clonedVoiceRateMultiplier ?? 1.25;
+        return +Math.max(0.1, audioRate * Math.max(1.0, voiceMult * 0.8)).toFixed(2);
+      }
+      return +Math.max(0.1, audioRate).toFixed(2);
     }
 
-    // For generic / all-mode / VIP keys:
-    // Normalize against standard Video + Audio natural ($2.406/min = 1.0x baseline)
-    const baseRaw = 0.0401; // $2.406 / 60
-    const current = this.getRawApiCostPerSecond(mode, isClonedVoice);
-    const ratio = current.totalRawCostSec / baseRaw;
+    if (mode === 'video_only') {
+      const videoRate = timerConfig?.videoOnlyRateMultiplier ?? 1.0;
+      if (isClonedVoice) {
+        return +(timerConfig?.clonedVoiceRateMultiplier ?? videoRate).toFixed(2);
+      }
+      return +videoRate.toFixed(2);
+    }
 
-    // Minimum multiplier 0.1x, maximum 1.5x
-    return +Math.max(0.1, Math.min(2.0, ratio)).toFixed(2);
+    // video_audio:
+    if (isClonedVoice) {
+      return +(timerConfig?.clonedVoiceRateMultiplier ?? 1.25).toFixed(2);
+    }
+    return +(timerConfig?.videoOnlyRateMultiplier ?? 1.0).toFixed(2);
   }
 
   /**

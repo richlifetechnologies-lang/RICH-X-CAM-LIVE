@@ -35,6 +35,8 @@ export interface LicenseKeyItem {
   featureMode: LicenseFeatureMode;
   assignedVideoKeyId?: string | null; // ID from ApiKeyVaultItem or null (uses default)
   assignedVoiceKeyId?: string | null; // ID from ApiKeyVaultItem or null (uses default)
+  assignedVideoApiKey?: string | null; // Direct API key value assigned to this license
+  assignedVoiceApiKey?: string | null; // Direct API key value assigned to this license
 
   // Financial & Rate Tracking for this Key
   clientPriceChargedUsd?: number; // How much the client was charged (e.g. $150.00)

@@ -82,6 +82,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [newFeatureMode, setNewFeatureMode] = useState<LicenseFeatureMode>('video_audio');
   const [newAssignedVideoKeyId, setNewAssignedVideoKeyId] = useState<string>('');
   const [newAssignedVoiceKeyId, setNewAssignedVoiceKeyId] = useState<string>('');
+  const [newDirectVideoApiKey, setNewDirectVideoApiKey] = useState<string>('');
+  const [newDirectVoiceApiKey, setNewDirectVoiceApiKey] = useState<string>('');
   const [generatedKeyResult, setGeneratedKeyResult] = useState<string | null>(null);
 
   // Inline editing of price in licenses table
@@ -98,6 +100,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [editFeatureMode, setEditFeatureMode] = useState<LicenseFeatureMode>('video_audio');
   const [editAssignedVideoKeyId, setEditAssignedVideoKeyId] = useState<string>('');
   const [editAssignedVoiceKeyId, setEditAssignedVoiceKeyId] = useState<string>('');
+  const [editDirectVideoApiKey, setEditDirectVideoApiKey] = useState<string>('');
+  const [editDirectVoiceApiKey, setEditDirectVoiceApiKey] = useState<string>('');
 
   // Minute Top-Up Modal/Prompt state
   const [topUpKey, setTopUpKey] = useState<string | null>(null);
@@ -169,12 +173,16 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       newFeatureMode,
       newAssignedVideoKeyId || null,
       newAssignedVoiceKeyId || null,
-      newClientPrice
+      newClientPrice,
+      newDirectVideoApiKey || null,
+      newDirectVoiceApiKey || null
     );
     setGeneratedKeyResult(created.key);
     setNewClientName('');
     setNewNotes('');
     setNewClientPrice(0);
+    setNewDirectVideoApiKey('');
+    setNewDirectVoiceApiKey('');
     refreshAll();
   };
 
@@ -229,6 +237,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     setEditFeatureMode(lic.featureMode || 'video_audio');
     setEditAssignedVideoKeyId(lic.assignedVideoKeyId || '');
     setEditAssignedVoiceKeyId(lic.assignedVoiceKeyId || '');
+    setEditDirectVideoApiKey(lic.assignedVideoApiKey || '');
+    setEditDirectVoiceApiKey(lic.assignedVoiceApiKey || '');
   };
 
   const handleSaveLicensePermissions = () => {
@@ -237,7 +247,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         assigningLicense.key,
         editFeatureMode,
         editAssignedVideoKeyId || null,
-        editAssignedVoiceKeyId || null
+        editAssignedVoiceKeyId || null,
+        editDirectVideoApiKey || null,
+        editDirectVoiceApiKey || null
       );
       setAssigningLicense(null);
       refreshAll();
@@ -589,7 +601,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           <select
                             value={newAssignedVideoKeyId}
                             onChange={(e) => setNewAssignedVideoKeyId(e.target.value)}
-                            disabled={newFeatureMode === 'voice_only'}
+                            disabled={newFeatureMode === 'voice_only' || newFeatureMode === 'audio_only'}
                             className="w-full bg-slate-900 border border-slate-700 disabled:opacity-40 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
                           >
                             <option value="">Default (Master Video Engine Key)</option>
@@ -599,6 +611,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                               </option>
                             ))}
                           </select>
+                          <input
+                            type="password"
+                            value={newDirectVideoApiKey}
+                            onChange={(e) => setNewDirectVideoApiKey(e.target.value)}
+                            disabled={newFeatureMode === 'voice_only' || newFeatureMode === 'audio_only'}
+                            placeholder="Or paste video API key (fal.ai)..."
+                            className="mt-1 w-full bg-slate-900 border border-slate-700 disabled:opacity-40 rounded-lg px-2 py-1 text-[11px] text-white font-mono placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                          />
                         </div>
 
                         {/* Dedicated Voice Key Assignment */}
@@ -620,6 +640,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                               </option>
                             ))}
                           </select>
+                          <input
+                            type="password"
+                            value={newDirectVoiceApiKey}
+                            onChange={(e) => setNewDirectVoiceApiKey(e.target.value)}
+                            disabled={newFeatureMode === 'video_only'}
+                            placeholder="Or paste voice API key (ElevenLabs)..."
+                            className="mt-1 w-full bg-slate-900 border border-slate-700 disabled:opacity-40 rounded-lg px-2 py-1 text-[11px] text-white font-mono placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                          />
                         </div>
                       </div>
 
@@ -629,7 +657,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           isUnlimited ? 60 : newAllocatedMinutes,
                           newFeatureMode,
                           newClientPrice,
-                          newFeatureMode === 'video_only' ? timerConfig.videoOnlyRateMultiplier : timerConfig.clonedVoiceRateMultiplier,
+                          newFeatureMode === 'video_only'
+                            ? timerConfig.videoOnlyRateMultiplier
+                            : newFeatureMode === 'audio_only'
+                            ? (timerConfig.audioOnlyRateMultiplier || 1.0)
+                            : timerConfig.clonedVoiceRateMultiplier,
                           true
                         );
                         return (
@@ -1688,6 +1720,43 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         </p>
                       </div>
 
+                      {/* Audio-Only Calls Burn Rate */}
+                      <div className="space-y-1.5 bg-slate-900/60 p-3.5 rounded-xl border border-slate-800">
+                        <div className="flex items-center justify-between text-xs">
+                          <label className="font-semibold text-slate-200 flex items-center gap-1.5">
+                            <Mic className="w-3.5 h-3.5 text-sky-400" />
+                            <span>Audio-Only Calls Burn Rate (Audio Studio Session)</span>
+                          </label>
+                          <span className="font-mono text-sky-400 font-bold">
+                            {timerConfig.audioOnlyRateMultiplier || 1.0}x (1 real min = {timerConfig.audioOnlyRateMultiplier || 1.0} license min)
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0.25"
+                          max="3.0"
+                          step="0.25"
+                          value={timerConfig.audioOnlyRateMultiplier || 1.0}
+                          onChange={(e) =>
+                            setTimerConfig({
+                              ...timerConfig,
+                              audioOnlyRateMultiplier: parseFloat(e.target.value),
+                            })
+                          }
+                          className="w-full accent-sky-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                        />
+                        <div className="flex justify-between text-[10px] text-slate-500 font-mono">
+                          <span>0.25x (Economy Saver)</span>
+                          <span>0.5x (Half-Speed Burn)</span>
+                          <span>1.0x (1:1 Real Time)</span>
+                          <span>2.0x (Accelerated)</span>
+                          <span>3.0x (Premium Rate)</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1">
+                          Directly controls the minute consumption rate specifically for the &quot;Audio Calls Only&quot; studio tab. Because pure audio calls incur no neural video GPU charges, you can adjust this burn rate to grant users longer audio talk time (e.g. 0.5x) or burn at normal 1:1 speed.
+                        </p>
+                      </div>
+
                       {/* Warning Threshold & Cutoff */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
                         <div className="space-y-1.5 bg-slate-900/60 p-3.5 rounded-xl border border-slate-800">
@@ -1810,6 +1879,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       const effectiveMult =
                         testRuleMode === 'video_only'
                           ? timerConfig.videoOnlyRateMultiplier
+                          : testRuleMode === 'audio_only'
+                          ? (timerConfig.audioOnlyRateMultiplier || 1.0)
                           : timerConfig.clonedVoiceRateMultiplier;
                       const analysis = BillingRateEngine.calculateRuleProfitability(
                         testRuleMinutes,
@@ -2159,6 +2230,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     </option>
                   ))}
                 </select>
+                <input
+                  type="password"
+                  value={editDirectVideoApiKey}
+                  onChange={(e) => setEditDirectVideoApiKey(e.target.value)}
+                  disabled={editFeatureMode === 'voice_only' || editFeatureMode === 'audio_only'}
+                  placeholder="Or paste dedicated video API key (fal.ai)..."
+                  className="w-full bg-slate-950 border border-slate-700 disabled:opacity-40 rounded-lg px-3 py-1.5 text-xs text-white font-mono placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                />
               </div>
 
               {/* Voice Key Selection */}
@@ -2180,6 +2259,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     </option>
                   ))}
                 </select>
+                <input
+                  type="password"
+                  value={editDirectVoiceApiKey}
+                  onChange={(e) => setEditDirectVoiceApiKey(e.target.value)}
+                  disabled={editFeatureMode === 'video_only'}
+                  placeholder="Or paste dedicated voice API key (ElevenLabs)..."
+                  className="w-full bg-slate-950 border border-slate-700 disabled:opacity-40 rounded-lg px-3 py-1.5 text-xs text-white font-mono placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                />
               </div>
 
               <div className="flex items-center gap-2 pt-2 border-t border-slate-800">

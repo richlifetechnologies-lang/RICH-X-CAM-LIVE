@@ -20,6 +20,7 @@ const STORAGE_VAULT_KEYS = 'richx_cam_api_key_vault_v1';
 const DEFAULT_TIMER_CONFIG: TimerConsumptionConfig = {
   videoOnlyRateMultiplier: 1.0,
   clonedVoiceRateMultiplier: 1.0,
+  audioOnlyRateMultiplier: 1.0,
   warningThresholdMinutes: 5,
   autoTerminateAtZero: true,
 };
@@ -47,6 +48,8 @@ const INITIAL_STARTER_KEY: LicenseKeyItem = {
   featureMode: 'video_audio',
   assignedVideoKeyId: null,
   assignedVoiceKeyId: null,
+  assignedVideoApiKey: null,
+  assignedVoiceApiKey: null,
 };
 
 export class LicenseService {
@@ -232,7 +235,9 @@ export class LicenseService {
     featureMode: LicenseFeatureMode = 'video_audio',
     assignedVideoKeyId: string | null = null,
     assignedVoiceKeyId: string | null = null,
-    clientPriceChargedUsd = 0
+    clientPriceChargedUsd = 0,
+    assignedVideoApiKey: string | null = null,
+    assignedVoiceApiKey: string | null = null
   ): LicenseKeyItem {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let p1 = '';
@@ -270,6 +275,8 @@ export class LicenseService {
       featureMode,
       assignedVideoKeyId: isAudioOnly ? null : assignedVideoKeyId,
       assignedVoiceKeyId: isVideoOnly ? null : assignedVoiceKeyId,
+      assignedVideoApiKey: isAudioOnly ? null : assignedVideoApiKey?.trim() || null,
+      assignedVoiceApiKey: isVideoOnly ? null : assignedVoiceApiKey?.trim() || null,
       clientPriceChargedUsd: Math.max(0, clientPriceChargedUsd || 0),
     };
 
@@ -298,7 +305,9 @@ export class LicenseService {
     key: string,
     featureMode: LicenseFeatureMode,
     assignedVideoKeyId: string | null,
-    assignedVoiceKeyId: string | null
+    assignedVoiceKeyId: string | null,
+    assignedVideoApiKey: string | null = null,
+    assignedVoiceApiKey: string | null = null
   ): void {
     const all = this.getAllLicenses();
     const license = all.find((l) => l.key === key);
@@ -309,6 +318,12 @@ export class LicenseService {
       license.featureMode = featureMode;
       license.assignedVideoKeyId = isAudioOnly ? null : assignedVideoKeyId;
       license.assignedVoiceKeyId = isVideoOnly ? null : assignedVoiceKeyId;
+      if (assignedVideoApiKey !== undefined) {
+        license.assignedVideoApiKey = isAudioOnly ? null : assignedVideoApiKey?.trim() || null;
+      }
+      if (assignedVoiceApiKey !== undefined) {
+        license.assignedVoiceApiKey = isVideoOnly ? null : assignedVoiceApiKey?.trim() || null;
+      }
       this.saveAllLicenses(all);
 
       const current = this.getActiveClientLicense();
@@ -354,7 +369,10 @@ export class LicenseService {
 
     // Resolve Video Key if allowed
     if (isVideoAllowed) {
-      if (license.assignedVideoKeyId) {
+      if (license.assignedVideoApiKey && license.assignedVideoApiKey.trim()) {
+        videoKey = license.assignedVideoApiKey.trim();
+        videoKeyLabel = 'Assigned Video Key';
+      } else if (license.assignedVideoKeyId) {
         const vaultItem = this.getVaultKeyById(license.assignedVideoKeyId);
         if (vaultItem && vaultItem.apiKey) {
           videoKey = vaultItem.apiKey;
@@ -371,7 +389,10 @@ export class LicenseService {
 
     // Resolve Voice Key if allowed
     if (isVoiceAllowed) {
-      if (license.assignedVoiceKeyId) {
+      if (license.assignedVoiceApiKey && license.assignedVoiceApiKey.trim()) {
+        voiceKey = license.assignedVoiceApiKey.trim();
+        voiceKeyLabel = 'Assigned Voice Key';
+      } else if (license.assignedVoiceKeyId) {
         const vaultItem = this.getVaultKeyById(license.assignedVoiceKeyId);
         if (vaultItem && vaultItem.apiKey) {
           voiceKey = vaultItem.apiKey;
@@ -580,7 +601,12 @@ export class LicenseService {
     }
 
     const timerConfig = this.getTimerConfig();
-    const dynamicMultiplier = BillingRateEngine.getMinuteConsumptionMultiplier(mode, isClonedVoice, current.featureMode);
+    const dynamicMultiplier = BillingRateEngine.getMinuteConsumptionMultiplier(
+      mode,
+      isClonedVoice,
+      current.featureMode,
+      timerConfig
+    );
     const effectiveSeconds = secondsSpent * dynamicMultiplier;
     const minutesToDeduct = effectiveSeconds / 60;
 

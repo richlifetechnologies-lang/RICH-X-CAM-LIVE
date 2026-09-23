@@ -154,6 +154,35 @@ export default function App() {
   // Calculate Effective Keys and Allowed Modes based on active license
   const effectiveKeys = LicenseService.getEffectiveKeysForLicense(activeLicense);
 
+  // Automatically synchronize assigned API keys into active config
+  useEffect(() => {
+    if (activeLicense) {
+      const keys = LicenseService.getEffectiveKeysForLicense(activeLicense);
+      let needsUpdate = false;
+      const updated = { ...config };
+
+      if (keys.videoKey && keys.videoKey !== updated.videoEngineApiKey) {
+        updated.videoEngineApiKey = keys.videoKey;
+        needsUpdate = true;
+      }
+      if (keys.voiceKey && keys.voiceKey !== updated.voiceEngineApiKey) {
+        updated.voiceEngineApiKey = keys.voiceKey;
+        needsUpdate = true;
+      }
+
+      if (needsUpdate) {
+        setConfig(updated);
+        CloudCallStore.saveConfig(updated);
+      }
+    }
+  }, [
+    activeLicense?.key,
+    activeLicense?.assignedVideoKeyId,
+    activeLicense?.assignedVoiceKeyId,
+    activeLicense?.assignedVideoApiKey,
+    activeLicense?.assignedVoiceApiKey,
+  ]);
+
   // Automatically select assigned tab when active license is loaded or changed
   useEffect(() => {
     if (activeLicense) {

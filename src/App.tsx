@@ -19,6 +19,11 @@ import {
   HelpCircle,
   ShieldCheck,
   Radio,
+  Lock,
+  Key,
+  Clock,
+  AlertTriangle,
+  Cpu,
 } from 'lucide-react';
 import { RichXCallConfig, ClonedVoiceItem, VideoOrientation } from './types/cloudCall';
 import { CloudCallStore } from './services/storage/CloudCallStore';
@@ -29,6 +34,10 @@ import { ElevenLabsEngine } from './services/voiceEngine/ElevenLabsEngine';
 import { VoiceCloningSection } from './components/VoiceCloningSection';
 import { CloudApiModal } from './components/CloudApiModal';
 import { SetupGuideModal } from './components/SetupGuideModal';
+import { ProductKeyActivationModal } from './components/ProductKeyActivationModal';
+import { AdminDashboardModal } from './components/AdminDashboardModal';
+import { LicenseService } from './services/licensing/LicenseService';
+import { LicenseKeyItem } from './types/licensing';
 
 export default function App() {
   const [config, setConfig] = useState<RichXCallConfig>(CloudCallStore.getConfig());
@@ -38,6 +47,11 @@ export default function App() {
   const [isCallActive, setIsCallActive] = useState(false);
   const [callStatus, setCallStatus] = useState<string>('RICHX CAM Ready for live call');
   const [isTheaterMode, setIsTheaterMode] = useState(false);
+
+  // Licensing & Admin State
+  const [activeLicense, setActiveLicense] = useState<LicenseKeyItem | null>(LicenseService.getActiveClientLicense());
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [isActivationModalOpen, setIsActivationModalOpen] = useState<boolean>(!LicenseService.getActiveClientLicense());
 
   // Hardware Device dropdown lists
   const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
@@ -51,7 +65,6 @@ export default function App() {
   const [durationSec, setDurationSec] = useState(0);
   const [audioInLevel, setAudioInLevel] = useState(0);
   const [audioOutLevel, setAudioOutLevel] = useState(0);
-  const [estimatedCost, setEstimatedCost] = useState(0);
 
   // Services
   const videoEngineRef = useRef<RichXVideoEngine>(new RichXVideoEngine());
@@ -59,6 +72,18 @@ export default function App() {
   const audioRoutingRef = useRef<VirtualMicRoutingService>(new VirtualMicRoutingService());
   const voiceEngineRef = useRef<ElevenLabsEngine>(new ElevenLabsEngine());
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Keyboard shortcut (Ctrl+Shift+A) for hidden Admin Portal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
+        e.preventDefault();
+        setIsAdminOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Enumerate hardware devices
   const refreshDevices = async () => {
@@ -84,23 +109,28 @@ export default function App() {
     };
   }, []);
 
-  // Duration & Cost Meter
+  // Duration & License Minute Consumption Meter
   useEffect(() => {
     if (isCallActive) {
       timerRef.current = setInterval(() => {
-        setDurationSec((prev) => {
-          const next = prev + 1;
-          const isCloudVoice = config.voiceMode === 'cloned_voice' && Boolean(config.voiceEngineApiKey);
-          const isCloudVideo = config.enableVideoTransform && Boolean(config.videoEngineApiKey);
+        setDurationSec((prev) => prev + 1);
 
-          const cost = next * (isCloudVideo ? 0.02 : 0) + next * (isCloudVoice ? 0.003 : 0);
-          setEstimatedCost(cost);
+        // Deduct usage via License Engine
+        const isCloned = config.voiceMode === 'cloned_voice';
+        const deductionResult = LicenseService.deductUsageSecond(1, isCloned);
 
-          if (cost >= config.spendingCapUsd || next >= config.maxDurationMinutes * 60) {
-            handleEndCall();
-          }
-          return next;
-        });
+        // Refresh current license state in HUD
+        const currentFresh = LicenseService.getActiveClientLicense();
+        if (currentFresh) {
+          setActiveLicense({ ...currentFresh });
+        }
+
+        // Check if minutes are exhausted and auto-terminate is required
+        if (deductionResult.shouldTerminate) {
+          handleEndCall();
+          setCallStatus('Call ended: Product Key call minutes have expired. Please top up.');
+          setIsActivationModalOpen(true);
+        }
       }, 1000);
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -111,12 +141,38 @@ export default function App() {
   }, [isCallActive, config]);
 
   const handleStartCall = async () => {
+    // 1. Verify License Status
+    const license = LicenseService.getActiveClientLicense();
+    if (!license) {
+      setIsActivationModalOpen(true);
+      return;
+    }
+
+    if (license.status === 'suspended') {
+      alert('This Product Key has been suspended by the administrator.');
+      return;
+    }
+
+    if (license.status === 'depleted' || (!license.isUnlimited && license.remainingMinutes <= 0)) {
+      alert('Your Product Key minutes have expired. Please contact the administrator to add minutes.');
+      return;
+    }
+
     try {
-      setCallStatus(`RICH X CAM LIVE: Initializing ${config.videoOrientation === 'portrait' ? 'Portrait (Mobile Phone)' : 'Landscape (Desktop/Webcam)'} video & audio sync...`);
+      setCallStatus(
+        `RICH X CAM LIVE: Initializing ${
+          config.videoOrientation === 'portrait' ? 'Portrait (Mobile Phone)' : 'Landscape (Desktop/Webcam)'
+        } video & audio sync...`
+      );
+
+      // Check Master Keys from Admin Vault if local configs are empty
+      const adminConfig = LicenseService.getAdminConfig();
+      const effectiveVideoKey = config.videoEngineApiKey || adminConfig.masterVideoEngineKey;
+      const effectiveVoiceKey = config.voiceEngineApiKey || adminConfig.masterVoiceEngineKey;
 
       // 1. Start Video Stream in chosen orientation
       await videoEngineRef.current.startWebRTCStream(
-        config.videoEngineApiKey,
+        effectiveVideoKey,
         config.selectedCameraId,
         config.videoPrompt,
         config.referenceImageUrl,
@@ -139,11 +195,11 @@ export default function App() {
       );
 
       // 3. Audio Pipeline Execution based on Voice Mode
-      if (config.voiceMode === 'cloned_voice' && config.voiceEngineApiKey) {
+      if (config.voiceMode === 'cloned_voice' && effectiveVoiceKey) {
         setCallStatus('Connecting RICHX Audio speech-to-speech pipeline...');
         await voiceEngineRef.current.init({
           provider: 'elevenlabs',
-          apiKey: config.voiceEngineApiKey,
+          apiKey: effectiveVoiceKey,
           selectedInputDeviceId: config.selectedMicId,
           selectedOutputDeviceId: config.selectedOutputId,
           monitorOutputDeviceId: 'default',
@@ -198,7 +254,6 @@ export default function App() {
       }
 
       setDurationSec(0);
-      setEstimatedCost(0);
       setIsCallActive(true);
       setCallStatus(
         `RICH X CAM LIVE Active (${config.videoOrientation === 'portrait' ? 'Portrait Phone' : 'Landscape PC'}) — ${
@@ -281,6 +336,11 @@ export default function App() {
   };
 
   const isPortrait = config.videoOrientation === 'portrait';
+  const timerConfig = LicenseService.getTimerConfig();
+  const isLowMinutes =
+    activeLicense &&
+    !activeLicense.isUnlimited &&
+    activeLicense.remainingMinutes <= timerConfig.warningThresholdMinutes;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
@@ -296,32 +356,65 @@ export default function App() {
                 RICH X CAM LIVE
               </h1>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-700/60 font-bold uppercase tracking-wider">
-                RICHX CAM VIRTUAL ENGINE
+                VIRTUAL ENGINE
               </span>
             </div>
             <p className="text-[11px] text-slate-400">
-              Professional Real-Time Video & Voice Conversion for Discord, Zoom, and Teams
+              Universal Studio for WhatsApp, Telegram, WeChat, Discord, Zoom, Teams, Meet & Browsers
             </p>
           </div>
         </div>
 
-        {/* Action Controls & Guide */}
+        {/* License Minute HUD & Header Controls */}
         <div className="flex items-center space-x-2.5">
+          {/* Active License Minutes HUD */}
+          {activeLicense ? (
+            <div
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-mono transition-all ${
+                isLowMinutes
+                  ? 'bg-amber-950/70 border-amber-500 text-amber-300 animate-pulse'
+                  : 'bg-slate-900/90 border-slate-800 text-slate-200 shadow-xs'
+              }`}
+            >
+              <Clock className={`w-3.5 h-3.5 ${isLowMinutes ? 'text-amber-400' : 'text-indigo-400'}`} />
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold text-white">{activeLicense.clientName}:</span>
+                <span className="font-bold">
+                  {activeLicense.isUnlimited ? (
+                    <span className="text-indigo-400">VIP ∞</span>
+                  ) : (
+                    <span>{activeLicense.remainingMinutes.toFixed(1)} mins</span>
+                  )}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsActivationModalOpen(true)}
+              className="px-3 py-1.5 rounded-xl bg-rose-950/80 border border-rose-800/80 text-rose-300 text-xs font-mono font-semibold flex items-center gap-1.5 animate-pulse"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>Unactivated (Enter Key)</span>
+            </button>
+          )}
+
+          {/* Calling App Integration Guide */}
           <button
             onClick={() => setIsGuideOpen(true)}
-            className="px-3.5 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 text-xs flex items-center gap-1.5 transition-colors border border-slate-700 shadow-xs"
+            className="px-3 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 text-xs flex items-center gap-1.5 transition-colors border border-slate-700 shadow-xs"
           >
             <HelpCircle className="w-3.5 h-3.5 text-sky-400" />
-            <span className="hidden sm:inline">Connect to Discord / Zoom</span>
-            <span className="sm:hidden">Calling Setup</span>
+            <span className="hidden sm:inline">Calling Apps Guide</span>
           </button>
 
+          {/* Owner & Admin Portal Discreet Button */}
           <button
-            onClick={() => setIsSettingsOpen(true)}
-            className="px-3.5 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 text-xs flex items-center gap-1.5 transition-colors border border-indigo-500/30 shadow-xs"
+            onClick={() => setIsAdminOpen(true)}
+            className="px-3 py-1.5 rounded-lg bg-indigo-950/70 hover:bg-indigo-900/80 text-indigo-300 text-xs flex items-center gap-1.5 transition-colors border border-indigo-700/60 shadow-xs"
+            title="Owner & Admin Control Panel (or press Ctrl+Shift+A)"
           >
-            <SettingsIcon className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Engine Keys</span>
+            <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="hidden md:inline font-medium">Admin Portal</span>
           </button>
         </div>
       </header>
@@ -348,7 +441,7 @@ export default function App() {
                 }`}
               >
                 <Monitor className="w-3.5 h-3.5" />
-                <span>Landscape (Desktop 16:9)</span>
+                <span>Landscape (16:9 PC/Desktop)</span>
               </button>
 
               {/* Portrait Button (Mobile Phone) */}
@@ -362,7 +455,7 @@ export default function App() {
                 }`}
               >
                 <Smartphone className="w-3.5 h-3.5" />
-                <span>Portrait (Phone 9:16)</span>
+                <span>Portrait (9:16 Phone Mode)</span>
               </button>
             </div>
           </div>
@@ -451,6 +544,17 @@ export default function App() {
                     <div className="bg-black/70 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/10 text-[11px] font-mono text-white">
                       {formatTimer(durationSec)}
                     </div>
+                    {activeLicense && !activeLicense.isUnlimited && (
+                      <div
+                        className={`px-2.5 py-1 rounded-full border text-[11px] font-mono font-semibold ${
+                          isLowMinutes
+                            ? 'bg-amber-950/80 border-amber-500 text-amber-300 animate-bounce'
+                            : 'bg-black/70 border-white/10 text-slate-300'
+                        }`}
+                      >
+                        {activeLicense.remainingMinutes.toFixed(1)}m Left
+                      </div>
+                    )}
                   </div>
 
                   {/* Bottom Bar: VU Meters & End Call */}
@@ -591,7 +695,7 @@ export default function App() {
               className="w-full accent-sky-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
             />
             <p className="text-[11px] text-slate-400">
-              Matches your mouth movement in RICHX CAM with what your listeners hear in Discord/Zoom.
+              Matches mouth movements in RICHX CAM with what your listeners hear in WhatsApp, Telegram, Zoom, or Discord.
             </p>
           </div>
         </div>
@@ -655,7 +759,7 @@ export default function App() {
             <VoiceCloningSection
               voices={voices}
               activeVoiceId={config.activeVoiceId}
-              voiceEngineApiKey={config.voiceEngineApiKey}
+              voiceEngineApiKey={config.voiceEngineApiKey || LicenseService.getAdminConfig().masterVoiceEngineKey}
               onSelectVoice={(id) => {
                 const updated = { ...config, activeVoiceId: id };
                 setConfig(updated);
@@ -676,12 +780,12 @@ export default function App() {
             </div>
           )}
 
-          {/* Output Device & Discord/Zoom Setup */}
+          {/* Output Device & Calling Apps Setup */}
           <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-5 space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-semibold text-white flex items-center gap-2">
                 <Layers className="w-4 h-4 text-emerald-400" />
-                <span>RICHX CAM Virtual Router</span>
+                <span>RICHX CAM Virtual Audio Endpoint</span>
               </h3>
               <button
                 type="button"
@@ -693,7 +797,7 @@ export default function App() {
             </div>
 
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              Routes synchronized audio to your calling application:
+              Routes synchronized audio to WhatsApp, Telegram, Discord, Zoom, Teams, and WeChat:
             </p>
 
             <select
@@ -705,7 +809,7 @@ export default function App() {
               }}
               className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
             >
-              <option value="default">RICHX CAM Audio Bridge (Default)</option>
+              <option value="default">RICHX MIC Audio Bridge (Default)</option>
               {availableOutputs.map((d) => (
                 <option key={d.deviceId} value={d.deviceId}>
                   {d.label || `Audio Endpoint (${d.deviceId.slice(0, 6)})`}
@@ -716,14 +820,45 @@ export default function App() {
             <div className="text-[11px] text-emerald-400 bg-emerald-950/30 border border-emerald-900/40 p-2.5 rounded-lg flex items-start gap-2">
               <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
               <span>
-                Inside Discord, Zoom, or Teams, select <strong>RICHX CAM (or CABLE Output)</strong> as your <strong>Microphone</strong>!
+                Inside WhatsApp, Telegram, Zoom, or Discord, select <strong>RICHX CAM</strong> as Camera and <strong>RICHX MIC (or CABLE Output)</strong> as Microphone!
               </span>
             </div>
           </div>
         </div>
       </main>
 
-      {/* Cloud API Credentials Modal */}
+      {/* Product Key Activation Screen */}
+      <ProductKeyActivationModal
+        isOpen={isActivationModalOpen}
+        onActivated={(lic) => {
+          setActiveLicense(lic);
+          setIsActivationModalOpen(false);
+        }}
+        onOpenAdmin={() => {
+          setIsActivationModalOpen(false);
+          setIsAdminOpen(true);
+        }}
+      />
+
+      {/* Owner & Admin Dashboard Modal */}
+      <AdminDashboardModal
+        isOpen={isAdminOpen}
+        onClose={() => {
+          setIsAdminOpen(false);
+          setActiveLicense(LicenseService.getActiveClientLicense());
+        }}
+        onLicenseChanged={() => {
+          setActiveLicense(LicenseService.getActiveClientLicense());
+        }}
+      />
+
+      {/* Setup Guide Modal */}
+      <SetupGuideModal
+        isOpen={isGuideOpen}
+        onClose={() => setIsGuideOpen(false)}
+      />
+
+      {/* Fallback Cloud API Modal (for Admin / Power User) */}
       <CloudApiModal
         settings={config}
         isOpen={isSettingsOpen}
@@ -733,12 +868,6 @@ export default function App() {
           setConfig(updated);
           CloudCallStore.saveConfig(updated);
         }}
-      />
-
-      {/* Setup Guide Modal */}
-      <SetupGuideModal
-        isOpen={isGuideOpen}
-        onClose={() => setIsGuideOpen(false)}
       />
     </div>
   );

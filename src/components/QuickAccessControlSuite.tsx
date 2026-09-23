@@ -30,6 +30,7 @@ interface QuickAccessControlSuiteProps {
   // Audio pipelining optional callback
   onOpenGuide?: () => void;
   accentColor?: 'purple' | 'indigo' | 'sky';
+  showCameraSelector?: boolean;
 }
 
 export const QuickAccessControlSuite: React.FC<QuickAccessControlSuiteProps> = ({
@@ -44,6 +45,7 @@ export const QuickAccessControlSuite: React.FC<QuickAccessControlSuiteProps> = (
   onVoiceDeleted,
   onOpenGuide,
   accentColor = 'purple',
+  showCameraSelector = false,
 }) => {
   const [isAudioPipeExpanded, setIsAudioPipeExpanded] = useState<boolean>(false);
   const [isVoiceCloneExpanded, setIsVoiceCloneExpanded] = useState<boolean>(
@@ -222,36 +224,38 @@ export const QuickAccessControlSuite: React.FC<QuickAccessControlSuiteProps> = (
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* 3. CAMERA SELECTOR                                            */}
+      {/* 3. CAMERA SELECTOR (Only rendered if showCameraSelector is true) */}
       {/* ------------------------------------------------------------- */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-md space-y-2">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-bold text-white flex items-center gap-1.5">
-            <Camera className="w-3.5 h-3.5 text-purple-400" />
-            <span>Camera Selector</span>
-          </label>
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-950 text-slate-300 border border-slate-800">
-            {availableCameras.length} Device{availableCameras.length === 1 ? '' : 's'}
-          </span>
-        </div>
+      {showCameraSelector && (
+        <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-md space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-white flex items-center gap-1.5">
+              <Camera className="w-3.5 h-3.5 text-purple-400" />
+              <span>Camera Selector</span>
+            </label>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-950 text-slate-300 border border-slate-800">
+              {availableCameras.length} Device{availableCameras.length === 1 ? '' : 's'}
+            </span>
+          </div>
 
-        <select
-          value={config.selectedCameraId}
-          onChange={(e) => onUpdateConfig({ selectedCameraId: e.target.value })}
-          disabled={isCallActive}
-          className="w-full bg-slate-950 border border-slate-700 hover:border-purple-500 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-purple-400 font-medium transition-colors cursor-pointer"
-        >
-          <option value="default">Default Physical Webcam</option>
-          {availableCameras.map((cam, idx) => (
-            <option key={cam.deviceId || idx} value={cam.deviceId}>
-              {cam.label || `Camera Device ${idx + 1}`}
-            </option>
-          ))}
-        </select>
-        <p className="text-[10px] text-slate-400">
-          Source camera for real-time facial expression and motion capture.
-        </p>
-      </div>
+          <select
+            value={config.selectedCameraId}
+            onChange={(e) => onUpdateConfig({ selectedCameraId: e.target.value })}
+            disabled={isCallActive}
+            className="w-full bg-slate-950 border border-slate-700 hover:border-purple-500 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-purple-400 font-medium transition-colors cursor-pointer"
+          >
+            <option value="default">Default Physical Webcam</option>
+            {availableCameras.map((cam, idx) => (
+              <option key={cam.deviceId || idx} value={cam.deviceId}>
+                {cam.label || `Camera Device ${idx + 1}`}
+              </option>
+            ))}
+          </select>
+          <p className="text-[10px] text-slate-400">
+            Source camera for real-time facial expression and motion capture.
+          </p>
+        </div>
+      )}
     </div>
   );
 };

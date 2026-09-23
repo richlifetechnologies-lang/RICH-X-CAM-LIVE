@@ -218,6 +218,32 @@ app.post('/api/fal/webrtc-handshake', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * POST /api/license/validate-minutes
+ * Backend validation for license minutes field.
+ * Allows any valid number of minutes including 1, 2, 3, 4, 5, or any integer >= 1.
+ */
+app.post('/api/license/validate-minutes', (req: Request, res: Response) => {
+  const { minutes, isUnlimited } = req.body;
+  if (isUnlimited) {
+    return res.json({ valid: true, minutes: 999999, message: 'Unlimited minutes approved' });
+  }
+
+  const minutesNum = Number(minutes);
+  if (!Number.isFinite(minutesNum) || minutesNum < 1) {
+    return res.status(400).json({
+      valid: false,
+      error: 'Minutes field must be at least 1 minute',
+    });
+  }
+
+  return res.json({
+    valid: true,
+    minutes: Math.round(minutesNum),
+    message: `Allocated minutes (${Math.round(minutesNum)}) accepted`,
+  });
+});
+
 // Setup Vite middleware in development or static serving in production
 async function startServer() {
   const isProd = process.env.NODE_ENV === 'production';

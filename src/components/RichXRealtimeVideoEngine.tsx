@@ -309,76 +309,79 @@ export const RichXRealtimeVideoEngine: React.FC<RichXRealtimeVideoEngineProps> =
       </div>
 
       {/* ========================================================================= */}
-      {/* 2. SEPARATE LIVE WEBCAM INPUT WINDOW (SEPARATE CONTAINER, NOT OVERLAID)   */}
+      {/* 2. SEPARATE LIVE WEBCAM INPUT WINDOW (COMPACT & SEPARATE)                 */}
       {/* ========================================================================= */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl space-y-3">
-        <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center text-purple-400">
+      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 sm:p-3.5 shadow-md">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+          {/* Status & Label */}
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-purple-950/70 border border-purple-800/60 flex items-center justify-center text-purple-400 shrink-0">
               <Camera className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
-                <span>Live Webcam Input</span>
-                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800/60 font-semibold">
-                  SEPARATE FEED
+              <div className="flex items-center gap-2">
+                <h3 className="text-xs font-bold text-white">Live Webcam Input</h3>
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800/60 font-semibold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  FEED ACTIVE
                 </span>
-              </h3>
-              <p className="text-[10px] text-slate-400">
-                Your physical camera driver feed. Tracking facial movements and head rotation.
+              </div>
+              <p className="text-[10px] text-slate-400 leading-tight">
+                Compact physical camera monitor &bull; Tracking facial expressions and motion
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setIsMirrorWebcam(!isMirrorWebcam)}
-              className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[10px] font-mono transition-colors cursor-pointer"
-            >
-              {isMirrorWebcam ? 'Mirrored' : 'Normal'}
-            </button>
-            <button
-              type="button"
-              onClick={() => startLocalWebcam(selectedCameraId)}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
-              title="Refresh camera feed"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
+          {/* Compact Webcam Viewport & Mini Controls */}
+          <div className="flex items-center gap-2 self-center sm:self-auto">
+            {/* Small Compact Webcam Viewport Window */}
+            <div className="relative w-28 sm:w-32 aspect-video rounded-lg overflow-hidden border border-purple-500/60 bg-black shadow shrink-0">
+              {cameraError ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-1 text-center bg-slate-950 text-rose-400">
+                  <AlertCircle className="w-3.5 h-3.5 mb-0.5" />
+                  <span className="text-[8px] font-semibold leading-none">Error</span>
+                  <button
+                    type="button"
+                    onClick={() => startLocalWebcam(selectedCameraId)}
+                    className="mt-1 px-1.5 py-0.5 rounded bg-slate-800 text-[8px] text-white hover:bg-slate-700"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <video
+                    ref={localWebcamRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className={`w-full h-full object-cover ${isMirrorWebcam ? 'scale-x-[-1]' : ''}`}
+                  />
+                  <div className="absolute bottom-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-sm" />
+                </>
+              )}
+            </div>
 
-        {/* Separate Live Webcam Viewport Window (Same clean size as requested) */}
-        <div className="relative w-full max-w-md mx-auto aspect-video rounded-xl overflow-hidden border-2 border-purple-500/50 bg-black shadow-lg">
-          {cameraError ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center bg-slate-950 text-rose-400 space-y-1">
-              <AlertCircle className="w-6 h-6" />
-              <span className="text-xs font-semibold">Camera Access Error</span>
-              <span className="text-[10px] text-slate-400 max-w-xs">{cameraError}</span>
+            {/* Quick Actions */}
+            <div className="flex flex-col gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsMirrorWebcam(!isMirrorWebcam)}
+                className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[9px] font-mono transition-colors cursor-pointer text-center"
+                title="Toggle Mirroring"
+              >
+                {isMirrorWebcam ? 'Mirrored' : 'Normal'}
+              </button>
               <button
                 type="button"
                 onClick={() => startLocalWebcam(selectedCameraId)}
-                className="mt-1 px-3 py-1 rounded bg-slate-800 text-xs text-white hover:bg-slate-700"
+                className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer flex items-center justify-center"
+                title="Refresh camera feed"
               >
-                Retry Camera
+                <RefreshCw className="w-3 h-3" />
               </button>
             </div>
-          ) : (
-            <>
-              <video
-                ref={localWebcamRef}
-                autoPlay
-                playsInline
-                muted
-                className={`w-full h-full object-cover ${isMirrorWebcam ? 'scale-x-[-1]' : ''}`}
-              />
-              <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/75 backdrop-blur-xs text-[9px] font-mono text-purple-200 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span>Webcam Active (Face & Mouth Tracking)</span>
-              </div>
-            </>
-          )}
+          </div>
         </div>
       </div>
     </div>

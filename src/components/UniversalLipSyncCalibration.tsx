@@ -29,7 +29,7 @@ export const UniversalLipSyncCalibration: React.FC<UniversalLipSyncCalibrationPr
 }) => {
   const isSpeaking = isCallActive && (metrics?.isSpeaking ?? false);
   const openness = isCallActive && metrics ? metrics.mouthOpenness : 0;
-  const phoneme = isCallActive && isSpeaking ? metrics.phoneme : 'Rest';
+  const phoneme = isCallActive && isSpeaking && metrics ? metrics.phoneme : 'Rest';
 
   // Dynamic latency delay display
   const latencyDisplay = autoCalibrationActive

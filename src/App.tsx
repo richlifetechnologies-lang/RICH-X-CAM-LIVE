@@ -452,16 +452,36 @@ export default function App() {
     }
   };
 
-  const handleEndCall = () => {
+  const handleEndCall = async () => {
     setIsCallActive(false);
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-    videoEngineRef.current.stopStream();
-    audioCaptureRef.current.stopCapture();
-    audioRoutingRef.current.stop();
-    voiceEngineRef.current.stopStreamingSession();
+
+    try {
+      videoEngineRef.current.stopStream();
+    } catch (err) {
+      console.warn('Error terminating video engine session:', err);
+    }
+
+    try {
+      await audioCaptureRef.current.stopCapture();
+    } catch (err) {
+      console.warn('Error terminating audio capture session:', err);
+    }
+
+    try {
+      await audioRoutingRef.current.stop();
+    } catch (err) {
+      console.warn('Error terminating audio routing:', err);
+    }
+
+    try {
+      await voiceEngineRef.current.stopStreamingSession();
+    } catch (err) {
+      console.warn('Error terminating voice engine session:', err);
+    }
 
     if (videoDisplayRef.current) {
       videoDisplayRef.current.srcObject = null;
@@ -469,11 +489,11 @@ export default function App() {
     setAudioInLevel(0);
     setAudioOutLevel(0);
     setLipSyncMetrics(null);
-    setCallStatus('Service stopped immediately. Camera, microphone, and API sessions terminated.');
+    setCallStatus('Service stopped immediately. Camera, microphone, WebRTC, and API sessions terminated.');
   };
 
-  const handleStopService = () => {
-    handleEndCall();
+  const handleStopService = async () => {
+    await handleEndCall();
   };
 
   const handleOrientationChange = (orientation: VideoOrientation) => {
@@ -870,7 +890,7 @@ export default function App() {
                 isAllowed={isVideoAudioAllowed}
               />
 
-              {/* STOP BUTTON (Beneath user window, ON TOP of microphone selector) */}
+              {/* STOP BUTTON (Beneath user window, ON TOP of hardware selectors) */}
               <StopServiceButton
                 isCallActive={isCallActive}
                 onStop={handleStopService}
@@ -879,29 +899,69 @@ export default function App() {
                 subtext="Immediately terminates WebRTC video/audio stream, microphone capture, API sessions, and halts wallet timer."
               />
 
-              {/* Hardware Device Selection (Microphone - BELOW STOP BUTTON) */}
-              <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-2 shadow-sm">
-                <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
-                  <Mic className="w-3.5 h-3.5 text-sky-400" />
-                  <span>Select Input Microphone (Lip-Sync Tracking Driver)</span>
-                </label>
-                <select
-                  value={config.selectedMicId}
-                  onChange={(e) => {
-                    const updated = { ...config, selectedMicId: e.target.value };
-                    setConfig(updated);
-                    CloudCallStore.saveConfig(updated);
-                  }}
-                  disabled={isCallActive}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
-                >
-                  <option value="default">Default System Microphone</option>
-                  {availableMics.map((m) => (
-                    <option key={m.deviceId} value={m.deviceId}>
-                      {m.label || `Microphone (${m.deviceId.slice(0, 6)})`}
-                    </option>
-                  ))}
-                </select>
+              {/* Hardware Device Selection (Microphone Selector | Camera Selector - Side-by-Side) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Microphone Selector */}
+                <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 space-y-2 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Mic className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Microphone Selector</span>
+                    </label>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-950 text-slate-400 border border-slate-800">
+                      {availableMics.length} Mic{availableMics.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <select
+                    value={config.selectedMicId}
+                    onChange={(e) => {
+                      const updated = { ...config, selectedMicId: e.target.value };
+                      setConfig(updated);
+                      CloudCallStore.saveConfig(updated);
+                    }}
+                    disabled={isCallActive}
+                    className="w-full bg-slate-950 border border-slate-700 hover:border-sky-500 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-sky-400 font-medium transition-colors cursor-pointer"
+                  >
+                    <option value="default">Default System Microphone</option>
+                    {availableMics.map((m) => (
+                      <option key={m.deviceId} value={m.deviceId}>
+                        {m.label || `Microphone (${m.deviceId.slice(0, 6)})`}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-slate-400">
+                    Input microphone for speech and lip-sync driving.
+                  </p>
+                </div>
+
+                {/* Camera Selector */}
+                <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 space-y-2 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Camera className="w-3.5 h-3.5 text-purple-400" />
+                      <span>Camera Selector</span>
+                    </label>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-950 text-slate-400 border border-slate-800">
+                      {availableCameras.length} Cam{availableCameras.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <select
+                    value={config.selectedCameraId}
+                    onChange={(e) => handleCameraChange(e.target.value)}
+                    disabled={isCallActive}
+                    className="w-full bg-slate-950 border border-slate-700 hover:border-purple-500 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-purple-400 font-medium transition-colors cursor-pointer"
+                  >
+                    <option value="default">Default Physical Webcam</option>
+                    {availableCameras.map((cam, idx) => (
+                      <option key={cam.deviceId || idx} value={cam.deviceId}>
+                        {cam.label || `Camera Device ${idx + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-slate-400">
+                    Source camera for real-time facial and motion capture.
+                  </p>
+                </div>
               </div>
 
               {/* Persona Appearance Prompt */}
@@ -1150,29 +1210,69 @@ export default function App() {
                 subtext="Immediately terminates microphone capture, voice conversion pipeline, and halts wallet timer."
               />
 
-              {/* Microphone Selector (Directly Below STOP Button) */}
-              <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 space-y-2 shadow-sm">
-                <label className="block text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
-                  <Mic className="w-3.5 h-3.5 text-sky-400" />
-                  <span>Select Audio Microphone (Below STOP)</span>
-                </label>
-                <select
-                  value={config.selectedMicId}
-                  onChange={(e) => {
-                    const updated = { ...config, selectedMicId: e.target.value };
-                    setConfig(updated);
-                    CloudCallStore.saveConfig(updated);
-                  }}
-                  disabled={isCallActive}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-sky-500"
-                >
-                  <option value="default">Default System Microphone</option>
-                  {availableMics.map((m) => (
-                    <option key={m.deviceId} value={m.deviceId}>
-                      {m.label || `Microphone (${m.deviceId.slice(0, 6)})`}
-                    </option>
-                  ))}
-                </select>
+              {/* Hardware Device Selection (Microphone Selector | Camera Selector - Side-by-Side) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Microphone Selector */}
+                <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 space-y-2 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Mic className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Microphone Selector</span>
+                    </label>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-950 text-slate-400 border border-slate-800">
+                      {availableMics.length} Mic{availableMics.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <select
+                    value={config.selectedMicId}
+                    onChange={(e) => {
+                      const updated = { ...config, selectedMicId: e.target.value };
+                      setConfig(updated);
+                      CloudCallStore.saveConfig(updated);
+                    }}
+                    disabled={isCallActive}
+                    className="w-full bg-slate-950 border border-slate-700 hover:border-sky-500 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-sky-400 font-medium transition-colors cursor-pointer"
+                  >
+                    <option value="default">Default System Microphone</option>
+                    {availableMics.map((m) => (
+                      <option key={m.deviceId} value={m.deviceId}>
+                        {m.label || `Microphone (${m.deviceId.slice(0, 6)})`}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-slate-400">
+                    Input microphone for audio calls and voice conversion.
+                  </p>
+                </div>
+
+                {/* Camera Selector */}
+                <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 space-y-2 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Camera className="w-3.5 h-3.5 text-purple-400" />
+                      <span>Camera Selector</span>
+                    </label>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-950 text-slate-400 border border-slate-800">
+                      {availableCameras.length} Cam{availableCameras.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <select
+                    value={config.selectedCameraId}
+                    onChange={(e) => handleCameraChange(e.target.value)}
+                    disabled={isCallActive}
+                    className="w-full bg-slate-950 border border-slate-700 hover:border-purple-500 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-purple-400 font-medium transition-colors cursor-pointer"
+                  >
+                    <option value="default">Default Physical Webcam</option>
+                    {availableCameras.map((cam, idx) => (
+                      <option key={cam.deviceId || idx} value={cam.deviceId}>
+                        {cam.label || `Camera Device ${idx + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-slate-400">
+                    Camera standby configuration for instant mode switching.
+                  </p>
+                </div>
               </div>
 
               {/* Real-Time Audio Telemetry & Lip-Sync Formants */}
@@ -1450,29 +1550,69 @@ export default function App() {
                 subtext="Immediately terminates WebRTC video/audio stream, microphone capture, API sessions, and halts wallet timer."
               />
 
-              {/* Hardware Device Selection (Microphone - BELOW STOP BUTTON) */}
-              <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-2 shadow-sm">
-                <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
-                  <Mic className="w-3.5 h-3.5 text-purple-400" />
-                  <span>Select Detected Microphone</span>
-                </label>
-                <select
-                  value={config.selectedMicId}
-                  onChange={(e) => {
-                    const updated = { ...config, selectedMicId: e.target.value };
-                    setConfig(updated);
-                    CloudCallStore.saveConfig(updated);
-                  }}
-                  disabled={isCallActive}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500"
-                >
-                  <option value="default">Default System Microphone</option>
-                  {availableMics.map((m) => (
-                    <option key={m.deviceId} value={m.deviceId}>
-                      {m.label || `Microphone (${m.deviceId.slice(0, 6)})`}
-                    </option>
-                  ))}
-                </select>
+              {/* Hardware Device Selection (Microphone Selector | Camera Selector - Side-by-Side) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Microphone Selector */}
+                <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 space-y-2 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Mic className="w-3.5 h-3.5 text-purple-400" />
+                      <span>Microphone Selector</span>
+                    </label>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-950 text-slate-400 border border-slate-800">
+                      {availableMics.length} Mic{availableMics.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <select
+                    value={config.selectedMicId}
+                    onChange={(e) => {
+                      const updated = { ...config, selectedMicId: e.target.value };
+                      setConfig(updated);
+                      CloudCallStore.saveConfig(updated);
+                    }}
+                    disabled={isCallActive}
+                    className="w-full bg-slate-950 border border-slate-700 hover:border-purple-500 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-purple-400 font-medium transition-colors cursor-pointer"
+                  >
+                    <option value="default">Default System Microphone</option>
+                    {availableMics.map((m) => (
+                      <option key={m.deviceId} value={m.deviceId}>
+                        {m.label || `Microphone (${m.deviceId.slice(0, 6)})`}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-slate-400">
+                    Input microphone for detected speech & lip-sync tracking.
+                  </p>
+                </div>
+
+                {/* Camera Selector */}
+                <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 space-y-2 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Camera className="w-3.5 h-3.5 text-purple-400" />
+                      <span>Camera Selector</span>
+                    </label>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-950 text-slate-400 border border-slate-800">
+                      {availableCameras.length} Cam{availableCameras.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <select
+                    value={config.selectedCameraId}
+                    onChange={(e) => handleCameraChange(e.target.value)}
+                    disabled={isCallActive}
+                    className="w-full bg-slate-950 border border-slate-700 hover:border-purple-500 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-purple-400 font-medium transition-colors cursor-pointer"
+                  >
+                    <option value="default">Default Physical Webcam</option>
+                    {availableCameras.map((cam, idx) => (
+                      <option key={cam.deviceId || idx} value={cam.deviceId}>
+                        {cam.label || `Camera Device ${idx + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-slate-400">
+                    Source camera for real-time facial and motion capture.
+                  </p>
+                </div>
               </div>
 
               {/* Persona Prompt */}

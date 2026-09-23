@@ -251,12 +251,14 @@ export class LicenseService {
     const isAudioOnly = featureMode === 'audio_only' || featureMode === 'voice_only';
     const isVideoOnly = featureMode === 'video_only';
 
+    const safeMinutes = isUnlimited ? 999999 : Math.max(1, Math.round(Number(minutes) || 1));
+
     const newLicense: LicenseKeyItem = {
       key,
       clientName: clientName.trim() || 'Valued Customer',
-      allocatedMinutes: isUnlimited ? 999999 : minutes,
+      allocatedMinutes: safeMinutes,
       usedMinutes: 0,
-      remainingMinutes: isUnlimited ? 999999 : minutes,
+      remainingMinutes: safeMinutes,
       isUnlimited,
       status: 'unactivated',
       boundHardwareId: null,
@@ -506,9 +508,10 @@ export class LicenseService {
   public static addMinutes(key: string, minutesToAdd: number): void {
     const all = this.getAllLicenses();
     const license = all.find((l) => l.key === key);
+    const safeAdd = Math.max(1, Math.round(Number(minutesToAdd) || 1));
     if (license && !license.isUnlimited) {
-      license.allocatedMinutes += minutesToAdd;
-      license.remainingMinutes += minutesToAdd;
+      license.allocatedMinutes += safeAdd;
+      license.remainingMinutes += safeAdd;
       if (license.remainingMinutes > 0 && license.status === 'depleted') {
         license.status = license.boundHardwareId ? 'active' : 'unactivated';
       }

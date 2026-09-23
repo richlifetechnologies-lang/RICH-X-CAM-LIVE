@@ -160,9 +160,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   const handleGenerateKey = (e: React.FormEvent) => {
     e.preventDefault();
+    const minutesVal = isUnlimited ? 999999 : Math.max(1, Number(newAllocatedMinutes) || 1);
     const created = LicenseService.generateKey(
       newClientName,
-      newAllocatedMinutes,
+      minutesVal,
       isUnlimited,
       newNotes,
       newFeatureMode,
@@ -214,8 +215,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   };
 
   const handleApplyTopUp = () => {
-    if (topUpKey && topUpAmount > 0) {
-      LicenseService.addMinutes(topUpKey, topUpAmount);
+    const safeAmount = Math.max(1, Number(topUpAmount) || 1);
+    if (topUpKey && safeAmount > 0) {
+      LicenseService.addMinutes(topUpKey, safeAmount);
       setTopUpKey(null);
       refreshAll();
     }
@@ -307,7 +309,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-150">
       <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-6xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-800 bg-slate-950/80 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-slate-800 bg-slate-950/80 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 shadow">
               <Shield className="w-5 h-5" />
@@ -372,9 +374,12 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           </div>
         ) : (
           /* Authenticated Dashboard Content */
-          <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Top Navigation Tabs */}
-            <div className="flex items-center gap-1 px-6 pt-3 border-b border-slate-800 bg-slate-950/40 text-xs overflow-x-auto">
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            {/* Top Navigation Tabs (Horizontal scroll only, no vertical scrollbar) */}
+            <div
+              className="admin-tabs-nav shrink-0 flex items-center gap-1 px-6 pt-3 border-b border-slate-800 bg-slate-950/40 text-xs overflow-x-auto overflow-y-hidden"
+              style={{ overflowY: 'hidden' }}
+            >
               <button
                 type="button"
                 onClick={() => setActiveTab('licenses')}
@@ -463,7 +468,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             )}
 
             {/* Content Area */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 min-h-0 overflow-y-auto p-6">
               {/* TAB 1: LICENSES & PC BINDINGS */}
               {activeTab === 'licenses' && (
                 <div className="space-y-6">
@@ -495,13 +500,16 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           <div className="flex items-center gap-1.5">
                             <input
                               type="number"
-                              min="5"
+                              min="1"
                               max="100000"
-                              step="5"
+                              step="1"
                               disabled={isUnlimited}
                               value={newAllocatedMinutes}
-                              onChange={(e) => setNewAllocatedMinutes(parseInt(e.target.value, 10) || 60)}
-                              className="w-full bg-slate-900 border border-slate-700 disabled:opacity-40 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value, 10);
+                                setNewAllocatedMinutes(isNaN(val) ? 1 : Math.max(1, val));
+                              }}
+                              className="w-full bg-slate-900 border border-slate-700 disabled:opacity-40 rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
                             />
                             <label className="flex items-center gap-1 text-[10px] text-slate-300 whitespace-nowrap cursor-pointer">
                               <input
@@ -2210,12 +2218,15 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 <label className="block text-xs text-slate-300 mb-1">Minutes to Add:</label>
                 <input
                   type="number"
-                  min="5"
-                  max="10000"
-                  step="5"
+                  min="1"
+                  max="100000"
+                  step="1"
                   value={topUpAmount}
-                  onChange={(e) => setTopUpAmount(parseInt(e.target.value, 10) || 15)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono"
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    setTopUpAmount(isNaN(val) ? 1 : Math.max(1, val));
+                  }}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
                 />
               </div>
 

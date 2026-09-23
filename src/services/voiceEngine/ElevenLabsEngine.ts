@@ -227,14 +227,17 @@ export class ElevenLabsEngine implements IVoiceConversionEngine {
 
   public async stopStreamingSession(): Promise<void> {
     if (this.socket) {
-      if (this.socket.readyState === WebSocket.OPEN) {
-        // Send EOS (End of Stream) token
-        try {
-          this.socket.send(JSON.stringify({ user_audio_chunk: '' }));
-        } catch {
-          // ignore
+      try {
+        if (this.socket.readyState === WebSocket.OPEN) {
+          try {
+            this.socket.send(JSON.stringify({ user_audio_chunk: '' }));
+          } catch {}
+          this.socket.close(1000, 'User stopped session');
+        } else if (this.socket.readyState === WebSocket.CONNECTING) {
+          this.socket.close();
         }
-        this.socket.close(1000, 'User stopped session');
+      } catch (err) {
+        console.warn('Error closing voice websocket:', err);
       }
       this.socket = null;
     }

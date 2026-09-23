@@ -459,9 +459,22 @@ export class RichXVideoEngine {
 
     if (this.peerConnection) {
       try {
+        // Stop all track senders first
+        this.peerConnection.getSenders().forEach((s) => {
+          try {
+            s.track?.stop();
+          } catch {}
+        });
         this.peerConnection.close();
       } catch {}
       this.peerConnection = null;
+    }
+
+    if (this.outgoingAudioTrack) {
+      try {
+        this.outgoingAudioTrack.stop();
+      } catch {}
+      this.outgoingAudioTrack = null;
     }
 
     if (this.localStream) {
@@ -471,7 +484,13 @@ export class RichXVideoEngine {
       this.localStream = null;
     }
 
-    this.remoteStream = null;
-    this.outgoingAudioTrack = null;
+    if (this.remoteStream) {
+      try {
+        this.remoteStream.getTracks().forEach((t) => t.stop());
+      } catch {}
+      this.remoteStream = null;
+    }
+
+    this.onRemoteStreamCb = null;
   }
 }

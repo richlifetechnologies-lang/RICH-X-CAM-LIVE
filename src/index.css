@@ -1,1 +1,11 @@
 @import "tailwindcss";
+
+/* Ensure tabs never trigger vertical scrollbars */
+.admin-tabs-nav {
+  overflow-y: hidden !important;
+  scrollbar-width: thin;
+}
+.admin-tabs-nav::-webkit-scrollbar:vertical {
+  display: none !important;
+  width: 0 !important;
+}

@@ -1,6 +1,6 @@
 @echo off
 setlocal
-title RICH X CAM LIVE - Virtual Device Installer
+title RICH X CAM LIVE - Remove Virtual Devices
 
 net session >nul 2>&1
 if %errorLevel% neq 0 (
@@ -9,6 +9,6 @@ if %errorLevel% neq 0 (
     exit /b 0
 )
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Install-RichXVirtualDevices.ps1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Install-RichXVirtualDevices.ps1" -Uninstall
 echo.
 pause

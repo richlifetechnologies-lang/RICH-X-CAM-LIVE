@@ -1,5 +1,11 @@
 @echo off
-REM Installs the RICHX Audio Virtual Cable Driver silently into Windows Device Manager
-echo Installing RICHX Audio Virtual Cable Driver...
-"%~dp0VBCABLE_Setup_x64.exe" -i -h
-echo RICHX Audio Driver Installed.
+setlocal
+echo.
+echo [RICH X CAM LIVE] The RICHX MIC virtual audio cable is installed by the
+echo main device installer (it downloads the official VB-CABLE driver and
+echo renames its endpoint to "RICHX MIC").
+echo.
+echo Run it instead:
+echo   %~dp0..\install-richx-virtual-devices.bat
+echo.
+pause

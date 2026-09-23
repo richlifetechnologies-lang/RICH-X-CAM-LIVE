@@ -54,34 +54,27 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         with:
-          tag_name: v1.0.3
-          name: "RICH X CAM LIVE v1.0.3 — Windows Setup Installer (.exe)"
+          tag_name: v1.1.0
+          name: "RICH X CAM LIVE v1.1.0 — Windows Setup Installer (.exe)"
           draft: false
           prerelease: false
           generate_release_notes: true
           body: |
-            # RICH X CAM LIVE v1.0.3 for Windows 10 & 11
+            # RICH X CAM LIVE v1.1.0 for Windows 10 & 11
 
             ### 🚀 Direct Windows Download:
-            - **Standard Windows Setup Wizard**: `RICH-X-CAM-LIVE-Setup-1.0.3.exe`
+            - **Standard Windows Setup Wizard**: `RICH-X-CAM-LIVE-Setup-1.1.0.exe`
               - Full standard installation wizard with custom destination drive/folder selection.
               - Desktop logo icon and Start Menu shortcuts automatically installed.
-              - Includes **RICHX CAM** DirectShow Virtual Camera and **RICHX MIC** virtual audio driver for WhatsApp, Zoom, Teams, Discord, and Telegram.
 
-            ### ✨ What's New & Synchronized in v1.0.3:
-            - **Native Windows Build Fixed**: Resolved Rollup/Vite Windows MSVC compiler binding on GitHub runner.
-            - **Relative Assets Configured**: Configured relative asset base (`./`) for Electron runtime window loading.
-            - **Synchronized Video & Voice API Keys on License Generation**:
-              - Generating a license key now binds both Video and Voice API keys directly.
-              - Full API key synchronization across Video Call + Audio Call, Audio Calls Only, and Video Calls Only studios.
-            - **Audio-Only Burn Rate Control**:
-              - Dedicated slider in Admin Dashboard under Timer & Minutes rules.
-              - Controls consumption rate (from 0.25x to 3.0x) specifically for audio calls.
-            - **Instant Voice Profile Calibration**:
-              - Voice cloning with reference MP3/WAV uploads without blocking errors.
-            - **Pristine Clean Video Stage**: Zero overlay clutter or text on active video streams.
-            - **Universal STOP Buttons** across all three studio tabs.
-            - **16:9 PC Landscape** and **9:16 Mobile Portrait** orientations.
+            ### ✨ What's New in v1.1.0:
+            - **Webcam Privacy Fixed**: the camera now stays completely off until you start a call (powered off in standby, no more auto-on at launch).
+            - **Genuine fal.ai LUCY 2.5 Output**: the Video Output panel now shows only the real AI-generated stream. The raw local camera fallback has been removed — if the fal.ai engine can't connect, you get a clear error instead of a fake feed.
+            - **Bundled API Server**: the Express server that proxies fal.ai WebRTC/token/upload routes now ships inside the installed app and starts automatically with it (previously all `/api/fal/*` calls failed in the desktop build).
+            - **Demo Key Removed**: the pre-seeded `RICHX-DEMO-60MIN-LIVE` key is gone. The studio is locked until a valid product key is activated, and tabs respect the license mode (video+audio / audio-only / video-only).
+            - **Honest Virtual Devices**: the installer now creates a real "RICHX MIC" audio endpoint via the official VB-CABLE driver and guides you through a real virtual camera driver (e.g. OBS Virtual Camera) — no phantom registry devices.
+              - Run `drivers\install-richx-virtual-devices.bat` as Administrator after installing.
+            - **Version Bump**: 1.0.3 -> 1.1.0.
           files: |
             release/*.exe
         env:

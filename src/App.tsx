@@ -613,8 +613,8 @@ export default function App() {
   };
 
   const isPortrait = config.videoOrientation === 'portrait';
-  const isVideoLocked = !effectiveKeys.isVideoAllowed;
-  const isVoiceCloneLocked = !effectiveKeys.isVoiceAllowed;
+  const isVideoLocked = !activeLicense || !effectiveKeys.isVideoAllowed;
+  const isVoiceCloneLocked = !activeLicense || !effectiveKeys.isVoiceAllowed;
   const isLowMinutes = activeLicense && !activeLicense.isUnlimited && activeLicense.remainingMinutes <= 5;
 
   const currentSelectedMic = availableMics.find((m) => m.deviceId === config.selectedMicId);
@@ -625,11 +625,11 @@ export default function App() {
   const assignedStudioMode = activeLicense ? LicenseService.getAssignedStudioMode(activeLicense.featureMode) : 'all';
   const assignedModeDisplayName = activeLicense ? LicenseService.getFeatureModeDisplayName(activeLicense.featureMode) : 'All Modes';
   
-  const isVideoAudioAllowed = !activeLicense || LicenseService.isTabAccessible('video_audio', activeLicense);
-  const isAudioOnlyAllowed = !activeLicense || LicenseService.isTabAccessible('audio_only', activeLicense);
-  const isVideoOnlyAllowed = !activeLicense || LicenseService.isTabAccessible('video_only', activeLicense);
+  const isVideoAudioAllowed = activeLicense ? LicenseService.isTabAccessible('video_audio', activeLicense) : false;
+  const isAudioOnlyAllowed = activeLicense ? LicenseService.isTabAccessible('audio_only', activeLicense) : false;
+  const isVideoOnlyAllowed = activeLicense ? LicenseService.isTabAccessible('video_only', activeLicense) : false;
 
-  const isCurrentTabAllowed = !activeLicense || LicenseService.isTabAccessible(callMode, activeLicense);
+  const isCurrentTabAllowed = activeLicense ? LicenseService.isTabAccessible(callMode, activeLicense) : false;
 
   const renderModeLockedBanner = (tabName: string) => (
     <div className="bg-gradient-to-r from-amber-950/70 via-slate-900 to-amber-950/40 border border-amber-500/50 rounded-2xl p-4 sm:p-5 shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1094,7 +1094,7 @@ export default function App() {
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-semibold text-white flex items-center gap-2">
                     <Layers className="w-4 h-4 text-emerald-400" />
-                    <span>RICHX Virtual Audio Endpoint (Output)</span>
+                    <span>Audio Output Device</span>
                   </h3>
                   <button
                     type="button"
@@ -1113,7 +1113,7 @@ export default function App() {
                   }}
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
                 >
-                  <option value="default">RICHX MIC Audio Bridge (Default)</option>
+                  <option value="default">System Default Output</option>
                   {availableOutputs.map((d) => (
                     <option key={d.deviceId} value={d.deviceId}>
                       {d.label || `Audio Endpoint (${d.deviceId.slice(0, 6)})`}
@@ -1123,7 +1123,7 @@ export default function App() {
                 <div className="text-[11px] text-emerald-400 bg-emerald-950/30 border border-emerald-900/40 p-2.5 rounded-lg flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>
-                    In WhatsApp, Zoom, Discord, or Teams, set Camera to <strong>RICHX CAM</strong> and Mic to <strong>RICHX MIC</strong>.
+                    After running the Virtual Device Installer, set Camera to <strong>RICHX CAM</strong> and Mic to <strong>RICHX MIC</strong> in WhatsApp, Zoom, Discord, or Teams.
                   </span>
                 </div>
               </div>
@@ -1172,7 +1172,7 @@ export default function App() {
                   </div>
                   <p className="text-xs text-slate-400 leading-relaxed">
                     {isCallActive
-                      ? `Broadcasting high-definition voice to WhatsApp, Telegram, Discord, Zoom via RICHX MIC endpoint.`
+                      ? `Broadcasting high-definition voice to WhatsApp, Telegram, Discord, Zoom via the RICHX MIC virtual audio cable.`
                       : `Crystal-clear audio calling without video/webcam usage. Select your preferred microphone and choose natural or cloned voice.`}
                   </p>
                 </div>
@@ -1530,7 +1530,7 @@ export default function App() {
               <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-3">
                 <h3 className="text-xs font-semibold text-white flex items-center gap-2">
                   <Layers className="w-4 h-4 text-emerald-400" />
-                  <span>RICHX MIC Virtual Output Endpoint</span>
+                  <span>Audio Output Device</span>
                 </h3>
                 <select
                   value={config.selectedOutputId}
@@ -1541,7 +1541,7 @@ export default function App() {
                   }}
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-sky-500"
                 >
-                  <option value="default">RICHX MIC Audio Bridge (Default)</option>
+                  <option value="default">System Default Output</option>
                   {availableOutputs.map((d) => (
                     <option key={d.deviceId} value={d.deviceId}>
                       {d.label || `Audio Endpoint (${d.deviceId.slice(0, 6)})`}
@@ -1551,7 +1551,7 @@ export default function App() {
                 <div className="text-[11px] text-sky-400 bg-sky-950/30 border border-sky-900/40 p-2.5 rounded-lg flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>
-                    Inside your calling app (Discord, WhatsApp, Zoom, Teams), choose <strong>RICHX MIC</strong> as your input device!
+                    Run the Virtual Device Installer first — then inside your calling app (Discord, WhatsApp, Zoom, Teams), choose <strong>RICHX MIC</strong> as your input device!
                   </span>
                 </div>
               </div>
@@ -1798,7 +1798,7 @@ export default function App() {
               <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-3">
                 <h3 className="text-xs font-semibold text-white flex items-center gap-2">
                   <Layers className="w-4 h-4 text-emerald-400" />
-                  <span>RICHX CAM Virtual Audio Endpoint (Output)</span>
+                  <span>Audio Output Device (Playback)</span>
                 </h3>
                 <select
                   value={config.selectedOutputId}
@@ -1809,7 +1809,7 @@ export default function App() {
                   }}
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-purple-500"
                 >
-                  <option value="default">RICHX MIC Audio Bridge (Default)</option>
+                  <option value="default">System Default Output</option>
                   {availableOutputs.map((d) => (
                     <option key={d.deviceId} value={d.deviceId}>
                       {d.label || `Audio Endpoint (${d.deviceId.slice(0, 6)})`}
@@ -1819,7 +1819,7 @@ export default function App() {
                 <div className="text-[11px] text-purple-300 bg-purple-950/30 border border-purple-900/40 p-2.5 rounded-lg flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-purple-400" />
                   <span>
-                    Select <strong>RICHX CAM</strong> as Camera and <strong>RICHX MIC</strong> as Audio in your calling apps!
+                    Run the Virtual Device Installer first — then select <strong>RICHX CAM</strong> as Camera and <strong>RICHX MIC</strong> as Audio in your calling apps!
                   </span>
                 </div>
               </div>

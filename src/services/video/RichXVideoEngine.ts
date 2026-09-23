@@ -22,6 +22,7 @@ export class RichXVideoEngine {
   private onRemoteStreamCb: ((stream: MediaStream) => void) | null = null;
   private onStatusChangeCb: ((status: string) => void) | null = null;
   private outgoingAudioTrack: MediaStreamTrack | null = null;
+  private realtimeError: string | null = null;
 
   /**
    * Returns the current live local camera stream for the UI preview
@@ -185,7 +186,9 @@ export class RichXVideoEngine {
   }
 
   /**
-   * Starts live Decart LUCY 2.5 Realtime session over WebRTC
+   * Starts live Decart LUCY 2.5 Realtime session over WebRTC.
+   * Resolves only once the genuine fal.ai generated video stream is flowing.
+   * Throws (never falls back to the local camera) when negotiation fails.
    */
   public async startWebRTCStream(
     apiKey: string,
@@ -196,10 +199,11 @@ export class RichXVideoEngine {
     onRemoteStream: (stream: MediaStream) => void,
     onStatusChange: (status: string) => void,
     outgoingAudioStream?: MediaStream | null
-  ): Promise<MediaStream> {
+  ): Promise<void> {
     this.stopStream();
     this.onRemoteStreamCb = onRemoteStream;
     this.onStatusChangeCb = onStatusChange;
+    this.realtimeError = null;
     this.currentPrompt = prompt || this.currentPrompt;
     this.currentOrientation = orientation;
     this.currentCameraId = cameraId;
@@ -297,6 +301,7 @@ export class RichXVideoEngine {
           this.isConnected = true;
           this.onStatusChangeCb?.('RICH X CAM: Active Realtime Video Call (30 FPS)');
         } else if (state === 'disconnected' || state === 'failed') {
+          this.isConnected = false;
           this.onStatusChangeCb?.('WebRTC connection disconnected. Cleaning up...');
         }
       };
@@ -336,6 +341,7 @@ export class RichXVideoEngine {
         handshakeHeaders['x-fal-key'] = apiKey;
       }
 
+      let negotiated = false;
       const handshakeRes = await fetch('/api/fal/webrtc-handshake', {
         method: 'POST',
         headers: handshakeHeaders,
@@ -362,20 +368,17 @@ export class RichXVideoEngine {
             sdp: answerSdp,
           });
           await this.peerConnection.setRemoteDescription(answerDesc);
-          this.isConnected = true;
+          negotiated = true;
           onStatusChange('RICH X Realtime: Connected to fal.ai LUCY 2.5 WebRTC session. Streaming @ 30 FPS...');
-          return this.localStream;
         }
       } else {
         const errJson = await handshakeRes.json().catch(() => ({}));
         console.warn('webrtc-handshake returned non-200:', handshakeRes.status, errJson);
-        if (handshakeRes.status === 401) {
-          onStatusChange('FAL_KEY required for cloud generation. Add in Admin Dashboard (Ctrl+Shift+A). Running studio preview...');
-        }
       }
 
-      // If server handshake fails or no key configured, connect via fal.realtime client with short-lived token
-      try {
+      // If the direct server handshake was not possible, negotiate via the fal.realtime
+      // client using a short-lived token minted by our local API server.
+      if (!negotiated) {
         const tokenRes = await fetch('/api/fal/token', {
           method: 'POST',
           headers: handshakeHeaders,
@@ -398,6 +401,7 @@ export class RichXVideoEngine {
                 }
               },
               onError: (err: any) => {
+                this.realtimeError = err?.message || String(err);
                 console.warn('fal.realtime error:', err);
               },
             });
@@ -411,32 +415,62 @@ export class RichXVideoEngine {
             });
 
             onStatusChange('Connected to realtime signaling relay for RICH X CAM');
-            return this.localStream;
           }
+        } else if (tokenRes.status === 401 || tokenRes.status === 403) {
+          throw new Error(
+            'Missing or invalid FAL_KEY for the fal.ai realtime engine. Add your fal.ai key in the Admin Dashboard (Ctrl+Shift+A).'
+          );
         }
-      } catch (tokenErr) {
-        console.warn('fal.realtime token connection attempt finished with:', tokenErr);
       }
 
-      // Fallback: If no server credentials exist or network blocks remote cloud engine,
-      // preview local camera with visual character identity overlay so user testing is uninterrupted
-      onStatusChange(
-        `RICH X CAM LIVE (Local Studio Preview) — Target Persona: ${
-          this.currentImageUrl ? 'Configured' : 'None'
-        } &bull; Set FAL_KEY in Admin Dashboard to enable cloud generation.`
-      );
-      this.remoteStream = this.localStream;
-      onRemoteStream(this.localStream);
-      this.isConnected = true;
-      return this.localStream;
+      if (!negotiated && !this.realtimeConnection) {
+        throw new Error(
+          'Could not reach the fal.ai realtime signaling service. Check your internet connection and FAL_KEY, then try again.'
+        );
+      }
+
+      await this.waitForRemoteStream(15000);
     } catch (err: any) {
-      console.warn('WebRTC negotiation encountered error:', err);
-      onStatusChange(`RICH X CAM: ${err.message || 'Stream running in local preview mode'}`);
-      this.remoteStream = this.localStream;
-      onRemoteStream(this.localStream);
-      this.isConnected = true;
-      return this.localStream;
+      console.error('WebRTC negotiation failed:', err);
+      this.stopStream();
+      if (err instanceof Error) throw err;
+      throw new Error(String(err?.message || err || 'Failed to connect to fal.ai LUCY 2.5 realtime engine'));
     }
+  }
+
+  /**
+   * Resolves once the genuine fal.ai generated remote video track arrives.
+   * Never resolves with the local camera — connection problems reject instead.
+   */
+  private waitForRemoteStream(timeoutMs: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const startedAt = Date.now();
+      const poll = () => {
+        if (this.isConnected && this.remoteStream) {
+          resolve();
+          return;
+        }
+        if (this.realtimeError) {
+          reject(new Error(`fal.ai realtime engine error: ${this.realtimeError}`));
+          return;
+        }
+        const pcState = this.peerConnection?.connectionState;
+        if (pcState === 'failed' || pcState === 'closed') {
+          reject(new Error('WebRTC connection to fal.ai failed or closed before the generated stream arrived.'));
+          return;
+        }
+        if (Date.now() - startedAt >= timeoutMs) {
+          reject(
+            new Error(
+              'Timed out waiting for the generated video stream from fal.ai LUCY 2.5. Verify your FAL_KEY is valid, has billing enabled, and that your network allows WebRTC, then try again.'
+            )
+          );
+          return;
+        }
+        setTimeout(poll, 250);
+      };
+      poll();
+    });
   }
 
   /**

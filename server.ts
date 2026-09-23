@@ -1,12 +1,17 @@
 import express, { Request, Response } from 'express';
 import path from 'path';
+import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// In the esbuild CJS bundle __dirname is provided by the CommonJS wrapper;
+// under tsx/ESM it is undefined, so derive it from import.meta.url instead.
+const SERVER_DIR =
+  typeof __dirname !== 'undefined'
+    ? __dirname
+    : path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
@@ -269,7 +274,10 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(__dirname, 'dist');
+    const distPath = process.env.RICHX_DIST_DIR
+      ? process.env.RICHX_DIST_DIR
+      : [path.join(SERVER_DIR, 'dist'), path.join(SERVER_DIR, '..', 'dist')].find((p) => existsSync(p)) ||
+        path.join(SERVER_DIR, 'dist');
     app.use(express.static(distPath));
     app.get('*', (_req: Request, res: Response) => {
       res.sendFile(path.join(distPath, 'index.html'));

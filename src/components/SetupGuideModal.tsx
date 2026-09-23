@@ -14,12 +14,12 @@ export const SetupGuideModal: React.FC<SetupGuideModalProps> = ({ isOpen, onClos
 
   const handleInstallDrivers = async () => {
     setIsInstalling(true);
-    setDriverStatus('Registering RICHX CAM & RICHX MIC drivers with Windows...');
+    setDriverStatus('Installing the virtual audio device (RICHX MIC)...');
     try {
       if ((window as any).electronAPI?.installVirtualDrivers) {
         const res = await (window as any).electronAPI.installVirtualDrivers();
         if (res.success) {
-          setDriverStatus('SUCCESS: RICHX CAM and RICHX MIC are now registered in Windows! Restart WhatsApp to select them.');
+          setDriverStatus('Installer finished. Restart your calling apps, then select RICHX MIC (audio) and your virtual camera (video) in their device lists.');
         } else {
           setDriverStatus(`Notice: ${res.message}. Run drivers\\install-richx-virtual-devices.bat as Administrator.`);
         }
@@ -82,12 +82,12 @@ export const SetupGuideModal: React.FC<SetupGuideModalProps> = ({ isOpen, onClos
                 </h4>
               </div>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300">
-                DirectShow & WASAPI
+                Windows Drivers
               </span>
             </div>
 
             <p className="text-[11px] text-slate-300 leading-relaxed">
-              If <strong>RICHX CAM</strong> or <strong>RICHX MIC</strong> does not appear in your WhatsApp camera/microphone dropdown list, click below to register the Windows DirectShow & CoreAudio device drivers with administrator rights:
+              Run the virtual device installer once (administrator rights required). It sets up the <strong>RICHX MIC</strong> audio endpoint and guides you through installing a virtual camera driver for <strong>RICHX CAM</strong>:
             </p>
 
             <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -98,7 +98,7 @@ export const SetupGuideModal: React.FC<SetupGuideModalProps> = ({ isOpen, onClos
                 className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 active:scale-95 disabled:opacity-50 text-white font-semibold text-xs flex items-center gap-2 shadow-md transition-all cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>{isInstalling ? 'Registering Drivers...' : 'Register Drivers in Windows'}</span>
+                <span>{isInstalling ? 'Installing...' : 'Install Virtual Devices'}</span>
               </button>
 
               <button
@@ -133,9 +133,9 @@ export const SetupGuideModal: React.FC<SetupGuideModalProps> = ({ isOpen, onClos
           <div className="bg-indigo-950/40 border border-indigo-500/30 rounded-xl p-3.5 flex items-start gap-3">
             <Globe className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
             <div>
-              <h4 className="text-xs font-semibold text-white">DirectShow & Windows Core Audio Universal Support</h4>
+              <h4 className="text-xs font-semibold text-white">Works With Any Calling App</h4>
               <p className="text-[11px] text-slate-300 leading-relaxed mt-0.5">
-                Because <strong>RICHX CAM</strong> and <strong>RICHX MIC</strong> register at the Windows Kernel driver layer (DirectShow / MediaFoundation / WASAPI), <strong>every single calling application</strong> (desktop client, Windows Store app, or web browser) automatically lists them alongside physical webcams and microphones.
+                After the installer finishes, <strong>RICHX MIC</strong> and your virtual camera appear in <strong>every calling application</strong> (desktop client, Windows Store app, or web browser) alongside physical webcams and microphones — no per-app plugins needed.
               </p>
             </div>
           </div>
@@ -197,13 +197,13 @@ export const SetupGuideModal: React.FC<SetupGuideModalProps> = ({ isOpen, onClos
               <div className="flex items-start gap-2 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
                 <span className="font-bold text-indigo-400">1. Video:</span>
                 <span>
-                  Any app that asks for camera permission queries the Windows DirectShow list. <strong>RICHX CAM</strong> appears right next to your real webcam. Works in portrait (phone) or landscape (PC).
+                  Once your virtual camera is installed, <strong>RICHX CAM</strong> appears right next to your real webcam in any app that asks for camera permission. Works in portrait (phone) or landscape (PC).
                 </span>
               </div>
               <div className="flex items-start gap-2 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
                 <span className="font-bold text-indigo-400">2. Audio:</span>
                 <span>
-                  Any app that captures microphone audio queries the Windows Audio Endpoint list. <strong>RICHX MIC</strong> delivers your lip-synced transformed voice automatically.
+                  After running the installer, <strong>RICHX MIC</strong> shows up in any app's microphone list and delivers your lip-synced transformed voice automatically.
                 </span>
               </div>
             </div>
@@ -212,7 +212,7 @@ export const SetupGuideModal: React.FC<SetupGuideModalProps> = ({ isOpen, onClos
 
         {/* Footer */}
         <div className="px-6 py-3.5 bg-slate-950 border-t border-slate-800 flex items-center justify-between">
-          <span className="text-[11px] text-slate-500">Universal DirectShow & CoreAudio Architecture</span>
+          <span className="text-[11px] text-slate-500">Windows Virtual Device Integration</span>
           <button
             onClick={onClose}
             className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition-colors"

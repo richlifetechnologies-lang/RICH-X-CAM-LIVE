@@ -53,10 +53,6 @@ export const ProductKeyActivationModal: React.FC<ProductKeyActivationModalProps>
     }, 400);
   };
 
-  const handlePasteDemo = () => {
-    setProductKey('RICHX-DEMO-60MIN-LIVE');
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/95 backdrop-blur-xl p-4">
       <div className="relative bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -107,18 +103,11 @@ export const ProductKeyActivationModal: React.FC<ProductKeyActivationModalProps>
 
           {/* Product Key Input */}
           <div className="space-y-2">
-            <label className="block text-xs font-semibold text-slate-300 flex items-center justify-between">
+            <label className="block text-xs font-semibold text-slate-300">
               <span className="flex items-center gap-1.5">
                 <Key className="w-4 h-4 text-indigo-400" />
                 License / Product Key:
               </span>
-              <button
-                type="button"
-                onClick={handlePasteDemo}
-                className="text-[10px] text-indigo-400 hover:text-indigo-300 underline font-mono"
-              >
-                Use Starter Demo Key
-              </button>
             </label>
             <input
               type="text"
@@ -172,7 +161,7 @@ export const ProductKeyActivationModal: React.FC<ProductKeyActivationModalProps>
         <div className="px-8 py-4 bg-slate-950 border-t border-slate-800/80 flex items-center justify-between text-xs">
           <div className="flex items-center gap-1.5 text-slate-500 text-[11px]">
             <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Universal DirectShow & CoreAudio Protected</span>
+            <span>Hardware-Locked License Protection</span>
           </div>
           <button
             type="button"

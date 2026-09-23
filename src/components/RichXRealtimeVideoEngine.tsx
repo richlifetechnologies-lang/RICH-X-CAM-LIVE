@@ -99,14 +99,37 @@ export const RichXRealtimeVideoEngine: React.FC<RichXRealtimeVideoEngineProps> =
     }
   };
 
+  // Manage local webcam stream for the separate live camera input window.
+  // The physical camera is ONLY acquired while a call is active — it stays
+  // powered off (no getUserMedia) in standby so the webcam light remains off.
   useEffect(() => {
-    startLocalWebcam(selectedCameraId);
-    return () => {
+    if (!isCallActive) {
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((t) => t.stop());
+        localStreamRef.current = null;
+      }
+      if (localWebcamRef.current) {
+        localWebcamRef.current.srcObject = null;
+      }
+      return;
+    }
+
+    let cancelled = false;
+    startLocalWebcam(selectedCameraId).then(() => {
+      if (cancelled && localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((t) => t.stop());
+        localStreamRef.current = null;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((t) => t.stop());
+        localStreamRef.current = null;
       }
     };
-  }, [selectedCameraId, videoOrientation]);
+  }, [isCallActive, selectedCameraId, videoOrientation]);
 
   // Ensure the video output element plays when call is active and stream is assigned
   useEffect(() => {
@@ -328,13 +351,22 @@ export const RichXRealtimeVideoEngine: React.FC<RichXRealtimeVideoEngineProps> =
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-xs font-bold text-white">Live Webcam Input</h3>
-                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800/60 font-semibold flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  FEED ACTIVE
-                </span>
+                {isCallActive ? (
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800/60 font-semibold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    FEED ACTIVE
+                  </span>
+                ) : (
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-700/60 font-semibold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                    STANDBY
+                  </span>
+                )}
               </div>
               <p className="text-[10px] text-slate-400 leading-tight">
-                Compact physical camera monitor &bull; Tracking facial expressions and motion
+                {isCallActive
+                  ? 'Compact physical camera monitor &bull; Tracking facial expressions and motion'
+                  : 'Camera is powered off &bull; It turns on automatically when a call starts'}
               </p>
             </div>
           </div>
@@ -343,7 +375,12 @@ export const RichXRealtimeVideoEngine: React.FC<RichXRealtimeVideoEngineProps> =
           <div className="flex items-center gap-2 self-center sm:self-auto">
             {/* Small Compact Webcam Viewport Window */}
             <div className="relative w-28 sm:w-32 aspect-video rounded-lg overflow-hidden border border-purple-500/60 bg-black shadow shrink-0">
-              {cameraError ? (
+              {!isCallActive ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 text-slate-500">
+                  <Camera className="w-4 h-4 mb-0.5" />
+                  <span className="text-[8px] font-semibold leading-none">Camera Off</span>
+                </div>
+              ) : cameraError ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center p-1 text-center bg-slate-950 text-rose-400">
                   <AlertCircle className="w-3.5 h-3.5 mb-0.5" />
                   <span className="text-[8px] font-semibold leading-none">Error</span>
@@ -370,24 +407,26 @@ export const RichXRealtimeVideoEngine: React.FC<RichXRealtimeVideoEngineProps> =
             </div>
 
             {/* Quick Actions */}
-            <div className="flex flex-col gap-1 shrink-0">
-              <button
-                type="button"
-                onClick={() => setIsMirrorWebcam(!isMirrorWebcam)}
-                className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[9px] font-mono transition-colors cursor-pointer text-center"
-                title="Toggle Mirroring"
-              >
-                {isMirrorWebcam ? 'Mirrored' : 'Normal'}
-              </button>
-              <button
-                type="button"
-                onClick={() => startLocalWebcam(selectedCameraId)}
-                className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer flex items-center justify-center"
-                title="Refresh camera feed"
-              >
-                <RefreshCw className="w-3 h-3" />
-              </button>
-            </div>
+            {isCallActive && (
+              <div className="flex flex-col gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsMirrorWebcam(!isMirrorWebcam)}
+                  className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[9px] font-mono transition-colors cursor-pointer text-center"
+                  title="Toggle Mirroring"
+                >
+                  {isMirrorWebcam ? 'Mirrored' : 'Normal'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => startLocalWebcam(selectedCameraId)}
+                  className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer flex items-center justify-center"
+                  title="Refresh camera feed"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

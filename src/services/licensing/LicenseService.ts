@@ -31,27 +31,6 @@ const DEFAULT_ADMIN_CONFIG: AdminSecurityConfig = {
   masterVoiceEngineKey: '',
 };
 
-const INITIAL_STARTER_KEY: LicenseKeyItem = {
-  key: 'RICHX-DEMO-60MIN-LIVE',
-  clientName: 'Demo Starter License (Video + Audio)',
-  allocatedMinutes: 60,
-  usedMinutes: 0,
-  remainingMinutes: 60,
-  isUnlimited: false,
-  status: 'unactivated',
-  boundHardwareId: null,
-  boundDeviceName: null,
-  firstActivatedAt: null,
-  lastActiveAt: null,
-  createdAt: Date.now(),
-  notes: 'Pre-seeded starter key assigned to Video Call + Audio Call',
-  featureMode: 'video_audio',
-  assignedVideoKeyId: null,
-  assignedVoiceKeyId: null,
-  assignedVideoApiKey: null,
-  assignedVoiceApiKey: null,
-};
-
 export class LicenseService {
   /**
    * Generates or retrieves a unique persistent Machine Hardware ID (HWID)
@@ -172,20 +151,23 @@ export class LicenseService {
     try {
       const data = localStorage.getItem(STORAGE_LICENSES);
       if (!data) {
-        const initial = [INITIAL_STARTER_KEY];
-        localStorage.setItem(STORAGE_LICENSES, JSON.stringify(initial));
-        return initial;
+        return [];
       }
       const parsed: LicenseKeyItem[] = JSON.parse(data);
+      // Purge the retired demo key if an old install still has it stored
+      const filtered = parsed.filter((item) => item.key !== 'RICHX-DEMO-60MIN-LIVE');
+      if (filtered.length !== parsed.length) {
+        localStorage.setItem(STORAGE_LICENSES, JSON.stringify(filtered));
+      }
       // Ensure backwards compatibility with featureMode
-      return parsed.map((item) => ({
+      return filtered.map((item) => ({
         ...item,
         featureMode: item.featureMode || 'full',
         assignedVideoKeyId: item.assignedVideoKeyId ?? null,
         assignedVoiceKeyId: item.assignedVoiceKeyId ?? null,
       }));
     } catch {
-      return [INITIAL_STARTER_KEY];
+      return [];
     }
   }
 
@@ -488,22 +470,15 @@ export class LicenseService {
     try {
       const stored = localStorage.getItem(STORAGE_CURRENT_LICENSE);
       if (!stored) {
-        // Auto-activate demo starter key so user can immediately test video calls without friction
-        const all = this.getAllLicenses();
-        const starter = all.find((l) => l.key === INITIAL_STARTER_KEY.key);
-        if (starter && starter.status !== 'suspended' && (starter.isUnlimited || starter.remainingMinutes > 0)) {
-          starter.status = 'active';
-          starter.boundHardwareId = this.getMachineHWID();
-          starter.boundDeviceName = this.getDeviceName();
-          if (!starter.firstActivatedAt) starter.firstActivatedAt = Date.now();
-          starter.lastActiveAt = Date.now();
-          this.saveAllLicenses(all);
-          localStorage.setItem(STORAGE_CURRENT_LICENSE, JSON.stringify(starter));
-          return starter;
-        }
         return null;
       }
       const parsed: LicenseKeyItem = JSON.parse(stored);
+
+      // Purge the retired demo key if an old install still has it active
+      if (parsed.key === 'RICHX-DEMO-60MIN-LIVE') {
+        localStorage.removeItem(STORAGE_CURRENT_LICENSE);
+        return null;
+      }
 
       // Verify with master list to check if admin modified or revoked it
       const all = this.getAllLicenses();

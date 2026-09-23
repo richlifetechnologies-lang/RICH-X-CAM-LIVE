@@ -1,6 +1,6 @@
 {
-  "name": "LiveVoice AI - Real-Time Voice Conversion Studio",
-  "description": "Cloud-powered real-time voice conversion desktop application and audio routing controller for Windows virtual microphone.",
+  "name": "RICH X CAM LIVE — Real-Time Video & Voice Studio",
+  "description": "RICH X CAM LIVE — Real-time video transformation and voice conversion software with universal calling app support (WhatsApp, Telegram, WeChat, Discord, Zoom, Teams).",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

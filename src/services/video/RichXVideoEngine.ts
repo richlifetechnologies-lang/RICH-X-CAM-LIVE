@@ -15,7 +15,8 @@ export class RichXVideoEngine {
     referenceImageUrl: string,
     orientation: VideoOrientation,
     onRemoteStream: (stream: MediaStream) => void,
-    onStatusChange: (status: string) => void
+    onStatusChange: (status: string) => void,
+    outgoingAudioStream?: MediaStream | null
   ): Promise<MediaStream> {
     this.stopStream();
 
@@ -34,7 +35,7 @@ export class RichXVideoEngine {
 
     try {
       this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
-    } catch (err) {
+    } catch {
       this.localStream = await navigator.mediaDevices.getUserMedia({
         video: {
           deviceId: cameraId && cameraId !== 'default' ? { exact: cameraId } : undefined,
@@ -52,7 +53,7 @@ export class RichXVideoEngine {
       return this.localStream;
     }
 
-    onStatusChange('RICH X CAM: Establishing high-speed WebRTC real-time connection...');
+    onStatusChange('RICH X CAM: Establishing high-speed WebRTC real-time connection with Lip-Sync audio...');
     fal.config({ credentials: apiKey });
 
     try {
@@ -63,17 +64,31 @@ export class RichXVideoEngine {
         ],
       });
 
+      // Add camera video tracks
       this.localStream.getTracks().forEach((track) => {
         if (this.peerConnection && this.localStream) {
           this.peerConnection.addTrack(track, this.localStream);
         }
       });
 
+      // Add outgoing audio track (lip-sync driver)
+      if (outgoingAudioStream) {
+        outgoingAudioStream.getAudioTracks().forEach((audioTrack) => {
+          if (this.peerConnection) {
+            try {
+              this.peerConnection.addTrack(audioTrack, outgoingAudioStream);
+            } catch (err) {
+              console.warn('Could not add outgoing audio track to WebRTC', err);
+            }
+          }
+        });
+      }
+
       this.peerConnection.ontrack = (event) => {
         if (event.streams && event.streams[0]) {
           this.remoteStream = event.streams[0];
           onRemoteStream(this.remoteStream);
-          onStatusChange(`RICH X CAM LIVE: Real-Time Stream Active [${isPortrait ? '9:16 Phone' : '16:9 Desktop'}]`);
+          onStatusChange(`RICH X CAM LIVE: Real-Time Stream Active [${isPortrait ? '9:16 Phone' : '16:9 Desktop'}] with Lip-Sync`);
         }
       };
 

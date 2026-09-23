@@ -16,16 +16,18 @@ export const INITIAL_PRESET_VOICE: ClonedVoiceItem = {
 export const DEFAULT_CONFIG: RichXCallConfig = {
   videoEngineApiKey: '',
   voiceEngineApiKey: '',
+  callMode: 'video_audio',
   videoPrompt: 'Cinematic portrait, photorealistic lighting, sharp detail, 8k resolution',
   referenceImageUrl: '',
   enableVideoTransform: true,
   selectedCameraId: 'default',
   videoOrientation: 'landscape', // 'landscape' (16:9 PC/Webcam) or 'portrait' (9:16 Phone/Mobile)
   
-  voiceMode: 'cloned_voice', // 'cloned_voice' or 'natural_mic'
+  voiceMode: 'natural_mic', // default to natural mic for realistic starting behavior
   activeVoiceId: 'pNInz6obpgDQGcFmaJgB',
   selectedMicId: 'default',
   selectedOutputId: 'default',
+  videoOnlyEnableVoiceCloning: false,
   audioLatencyCompensationMs: 120, // Synchronizes audio delivery with video rendering
   
   spendingCapUsd: 5.0,

@@ -466,7 +466,22 @@ export class LicenseService {
   public static getActiveClientLicense(): LicenseKeyItem | null {
     try {
       const stored = localStorage.getItem(STORAGE_CURRENT_LICENSE);
-      if (!stored) return null;
+      if (!stored) {
+        // Auto-activate demo starter key so user can immediately test video calls without friction
+        const all = this.getAllLicenses();
+        const starter = all.find((l) => l.key === INITIAL_STARTER_KEY.key);
+        if (starter && starter.status !== 'suspended' && (starter.isUnlimited || starter.remainingMinutes > 0)) {
+          starter.status = 'active';
+          starter.boundHardwareId = this.getMachineHWID();
+          starter.boundDeviceName = this.getDeviceName();
+          if (!starter.firstActivatedAt) starter.firstActivatedAt = Date.now();
+          starter.lastActiveAt = Date.now();
+          this.saveAllLicenses(all);
+          localStorage.setItem(STORAGE_CURRENT_LICENSE, JSON.stringify(starter));
+          return starter;
+        }
+        return null;
+      }
       const parsed: LicenseKeyItem = JSON.parse(stored);
 
       // Verify with master list to check if admin modified or revoked it

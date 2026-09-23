@@ -108,6 +108,13 @@ export const RichXRealtimeVideoEngine: React.FC<RichXRealtimeVideoEngineProps> =
     };
   }, [selectedCameraId, videoOrientation]);
 
+  // Ensure the video output element plays when call is active and stream is assigned
+  useEffect(() => {
+    if (isCallActive && videoDisplayRef.current && videoDisplayRef.current.srcObject) {
+      videoDisplayRef.current.play().catch((e) => console.warn('Video play interrupted:', e));
+    }
+  }, [isCallActive, videoDisplayRef]);
+
   // Picture in Picture for system window
   const handlePictureInPicture = async () => {
     if (videoDisplayRef.current && document.pictureInPictureEnabled) {

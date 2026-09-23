@@ -183,10 +183,12 @@ app.post('/api/fal/webrtc-handshake', async (req: Request, res: Response) => {
   }
 
   try {
+    const authHeader = falKey.startsWith('Key ') ? falKey : `Key ${falKey}`;
     const payload: Record<string, any> = {
       sdp,
       type,
       prompt: prompt || 'Professional video call',
+      enable_prompt_expansion: true,
     };
 
     if (reference_image_url) {
@@ -197,7 +199,7 @@ app.post('/api/fal/webrtc-handshake', async (req: Request, res: Response) => {
     const response = await fetch('https://fal.run/decart/lucy-2-5/realtime', {
       method: 'POST',
       headers: {
-        Authorization: `Key ${falKey}`,
+        Authorization: authHeader,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
@@ -205,13 +207,24 @@ app.post('/api/fal/webrtc-handshake', async (req: Request, res: Response) => {
 
     if (!response.ok) {
       const errText = await response.text();
+      console.error(`fal.run/decart/lucy-2-5/realtime returned ${response.status}:`, errText);
       return res.status(response.status).json({
-        error: `decart/lucy-2-5/realtime returned ${response.status}: ${errText}`,
+        error: `fal.ai LUCY 2.5 returned ${response.status}: ${errText}`,
       });
     }
 
     const result = await response.json();
-    return res.json(result);
+    const answerSdp =
+      result.sdp ||
+      result.answer?.sdp ||
+      result.candidate?.sdp ||
+      (result.type === 'answer' && result.sdp ? result.sdp : null);
+
+    return res.json({
+      sdp: answerSdp,
+      type: result.type || 'answer',
+      raw: result,
+    });
   } catch (err: any) {
     console.error('WebRTC handshake failed', err);
     return res.status(500).json({ error: err.message || 'WebRTC signaling failed' });

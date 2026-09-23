@@ -300,8 +300,16 @@ export default function App() {
           ? Boolean(config.videoOnlyEnableVoiceCloning && keysInfo.isVoiceAllowed)
           : config.voiceMode === 'cloned_voice' && keysInfo.isVoiceAllowed;
 
-      const effectiveVideoKey = keysInfo.videoKey || config.videoEngineApiKey;
-      const effectiveVoiceKey = keysInfo.voiceKey || config.voiceEngineApiKey;
+      const effectiveVideoKey =
+        keysInfo.videoKey ||
+        config.videoEngineApiKey ||
+        LicenseService.getAdminConfig().masterVideoEngineKey ||
+        '';
+      const effectiveVoiceKey =
+        keysInfo.voiceKey ||
+        config.voiceEngineApiKey ||
+        LicenseService.getAdminConfig().masterVoiceEngineKey ||
+        '';
 
       setCallStatus(
         isAudioOnly
@@ -428,6 +436,7 @@ export default function App() {
           (stream) => {
             if (videoDisplayRef.current) {
               videoDisplayRef.current.srcObject = stream;
+              videoDisplayRef.current.play().catch(() => {});
             }
           },
           (status) => setCallStatus(status),
@@ -438,6 +447,12 @@ export default function App() {
       setDurationSec(0);
       setSessionFinancials(BillingRateEngine.calculateSessionFinancials(0, callMode, isClonedVoiceActive));
       setIsCallActive(true);
+
+      // Force play output video stream on videoDisplayRef if already attached
+      if (videoDisplayRef.current && videoEngineRef.current.getRemoteStream()) {
+        videoDisplayRef.current.srcObject = videoEngineRef.current.getRemoteStream();
+        videoDisplayRef.current.play().catch(() => {});
+      }
       setCallStatus(
         isAudioOnly
           ? `RICH X Audio Live Active — ${isClonedVoiceActive ? 'Cloned Voice' : `Natural Mic (${micLabel})`}`
@@ -964,6 +979,36 @@ export default function App() {
                 </div>
               </div>
 
+              {/* IMAGE UPLOAD WINDOW & UNIVERSAL LIP-SYNC CALIBRATION (BELOW CAMERA & MIC SELECTORS) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <AvatarReferenceUploader
+                  referenceImageUrl={config.referenceImageUrl}
+                  onImageChange={handleUpdateReferenceImage}
+                  isCallActive={isCallActive}
+                  compact={true}
+                />
+
+                <UniversalLipSyncCalibration
+                  autoCalibrationActive={config.autoLipSyncCalibration}
+                  onToggleAuto={() => {
+                    const updated = { ...config, autoLipSyncCalibration: !config.autoLipSyncCalibration };
+                    setConfig(updated);
+                    CloudCallStore.saveConfig(updated);
+                  }}
+                  audioLatencyCompensationMs={config.audioLatencyCompensationMs}
+                  onChangeLatency={(val) => {
+                    const updated = { ...config, audioLatencyCompensationMs: val };
+                    setConfig(updated);
+                    CloudCallStore.saveConfig(updated);
+                  }}
+                  metrics={lipSyncMetrics}
+                  isCallActive={isCallActive}
+                  callMode="video_audio"
+                  voiceMode={config.voiceMode}
+                  accentColor="amber"
+                />
+              </div>
+
               {/* Persona Appearance Prompt */}
               <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-2">
                 <div className="flex items-center justify-between text-xs">
@@ -994,40 +1039,9 @@ export default function App() {
               />
             </div>
 
-            {/* Right Column: Image Upload, Lip-Sync, Quick Controls Suite & Audio Routing (5 Cols) */}
+            {/* Right Column: Quick Controls Suite & Audio Routing (5 Cols) */}
             <div className="lg:col-span-5 space-y-4">
-              {/* SIDE-BY-SIDE UPPER SECTION: Compact Image Upload & Universal Lip Sync Calibration */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <AvatarReferenceUploader
-                  referenceImageUrl={config.referenceImageUrl}
-                  onImageChange={handleUpdateReferenceImage}
-                  isCallActive={isCallActive}
-                  compact={true}
-                />
-
-                <UniversalLipSyncCalibration
-                  autoCalibrationActive={config.autoLipSyncCalibration}
-                  onToggleAuto={() => {
-                    const updated = { ...config, autoLipSyncCalibration: !config.autoLipSyncCalibration };
-                    setConfig(updated);
-                    CloudCallStore.saveConfig(updated);
-                  }}
-                  audioLatencyCompensationMs={config.audioLatencyCompensationMs}
-                  onChangeLatency={(val) => {
-                    const updated = { ...config, audioLatencyCompensationMs: val };
-                    setConfig(updated);
-                    CloudCallStore.saveConfig(updated);
-                  }}
-                  metrics={lipSyncMetrics}
-                  isCallActive={isCallActive}
-                  callMode="video_audio"
-                  voiceMode={config.voiceMode}
-                  accentColor="amber"
-                />
-              </div>
-
-              {/* QUICK CONTROLS DIRECTLY BELOW IMAGE UPLOAD SECTION */}
-              {/* (Camera Selector, Audio Pipelining, Voice Clone) */}
+              {/* QUICK CONTROLS (Audio Pipelining, Voice Clone, Virtual Cable) */}
               <QuickAccessControlSuite
                 config={config}
                 onUpdateConfig={(partial) => {
@@ -1615,6 +1629,36 @@ export default function App() {
                 </div>
               </div>
 
+              {/* IMAGE UPLOAD WINDOW & UNIVERSAL LIP-SYNC CALIBRATION (BELOW CAMERA & MIC SELECTORS) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <AvatarReferenceUploader
+                  referenceImageUrl={config.referenceImageUrl}
+                  onImageChange={handleUpdateReferenceImage}
+                  isCallActive={isCallActive}
+                  compact={true}
+                />
+
+                <UniversalLipSyncCalibration
+                  autoCalibrationActive={config.autoLipSyncCalibration}
+                  onToggleAuto={() => {
+                    const updated = { ...config, autoLipSyncCalibration: !config.autoLipSyncCalibration };
+                    setConfig(updated);
+                    CloudCallStore.saveConfig(updated);
+                  }}
+                  audioLatencyCompensationMs={config.audioLatencyCompensationMs}
+                  onChangeLatency={(val) => {
+                    const updated = { ...config, audioLatencyCompensationMs: val };
+                    setConfig(updated);
+                    CloudCallStore.saveConfig(updated);
+                  }}
+                  metrics={lipSyncMetrics}
+                  isCallActive={isCallActive}
+                  callMode="video_only"
+                  voiceMode={config.videoOnlyEnableVoiceCloning ? 'cloned_voice' : 'natural_mic'}
+                  accentColor="purple"
+                />
+              </div>
+
               {/* Persona Prompt */}
               <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-2">
                 <div className="flex items-center justify-between text-xs">
@@ -1645,40 +1689,9 @@ export default function App() {
               />
             </div>
 
-            {/* Right Column: Image Upload, Lip-Sync, Quick Controls Suite & Audio Routing (5 Cols) */}
+            {/* Right Column: Quick Controls Suite & Audio Routing (5 Cols) */}
             <div className="lg:col-span-5 space-y-4">
-              {/* SIDE-BY-SIDE UPPER SECTION: Compact Image Upload & Universal Lip Sync Calibration */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <AvatarReferenceUploader
-                  referenceImageUrl={config.referenceImageUrl}
-                  onImageChange={handleUpdateReferenceImage}
-                  isCallActive={isCallActive}
-                  compact={true}
-                />
-
-                <UniversalLipSyncCalibration
-                  autoCalibrationActive={config.autoLipSyncCalibration}
-                  onToggleAuto={() => {
-                    const updated = { ...config, autoLipSyncCalibration: !config.autoLipSyncCalibration };
-                    setConfig(updated);
-                    CloudCallStore.saveConfig(updated);
-                  }}
-                  audioLatencyCompensationMs={config.audioLatencyCompensationMs}
-                  onChangeLatency={(val) => {
-                    const updated = { ...config, audioLatencyCompensationMs: val };
-                    setConfig(updated);
-                    CloudCallStore.saveConfig(updated);
-                  }}
-                  metrics={lipSyncMetrics}
-                  isCallActive={isCallActive}
-                  callMode="video_only"
-                  voiceMode={config.videoOnlyEnableVoiceCloning ? 'cloned_voice' : 'natural_mic'}
-                  accentColor="purple"
-                />
-              </div>
-
-              {/* QUICK CONTROLS DIRECTLY BELOW IMAGE UPLOAD SECTION */}
-              {/* (Camera Selector, Audio Pipelining, Voice Clone) */}
+              {/* QUICK CONTROLS (Audio Pipelining, Voice Clone, Virtual Cable) */}
               <QuickAccessControlSuite
                 config={config}
                 onUpdateConfig={(partial) => {

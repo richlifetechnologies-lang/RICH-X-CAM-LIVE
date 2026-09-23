@@ -1,6 +1,9 @@
 {
   "name": "RICH X CAM LIVE — Real-Time Video & Voice Studio",
-  "description": "RICH X CAM LIVE — Real-time video transformation and voice conversion software with universal calling app support (WhatsApp, Telegram, WeChat, Discord, Zoom, Teams).",
-  "requestFramePermissions": [],
+  "description": "RICH X CAM LIVE — Real-Time Video and Audio Voice Conversion Studio for Discord, Zoom, and Teams.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -19,11 +19,11 @@ const STORAGE_PROVIDER_COSTS = 'richx_api_provider_costs_v1';
  *    - Bandwidth & signaling relay: $0.0001 per second ($0.0060 / minute).
  */
 export const VERIFIED_DEFAULT_PROVIDER_COSTS: ApiProviderCostConfig = {
-  lucy25VideoPerSecCost: 0.0400, // $0.04 / sec = $2.40 / min (fal.ai official)
-  lucyProviderName: 'fal.ai (Decart LUCY 2.5 Real-Time Video)',
+  lucy25VideoPerSecCost: 0.0400, // $0.04 / sec = $2.40 / min
+  lucyProviderName: 'RICH X Realtime Neural Video Engine (Cloud GPU)',
 
-  voiceCloningPerSecCost: 0.0025, // $0.15 / min (ElevenLabs STS official)
-  voiceProviderName: 'ElevenLabs Speech-to-Speech (STS) & Instant Clone',
+  voiceCloningPerSecCost: 0.0025, // $0.15 / min
+  voiceProviderName: 'Speech-to-Speech (STS) & Instant Clone Engine',
 
   naturalAudioPerSecCost: 0.0001, // $0.006 / min (WebRTC Natural Audio Relay)
 
@@ -31,7 +31,7 @@ export const VERIFIED_DEFAULT_PROVIDER_COSTS: ApiProviderCostConfig = {
   minGuaranteedProfitMarginPercent: 25, // 25% Absolute Minimum Safety Floor
 
   lastVerifiedAt: '2026-09-23',
-  sourceNotes: 'Verified via fal.ai real-time LUCY 2.5 ($0.04/sec) and ElevenLabs STS streaming ($0.12-$0.20/min).',
+  sourceNotes: 'Verified via realtime GPU video streaming ($0.04/sec) and voice streaming ($0.12-$0.20/min).',
 };
 
 export class BillingRateEngine {

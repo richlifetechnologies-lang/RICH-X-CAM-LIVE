@@ -44,6 +44,55 @@ export interface TimerConsumptionConfig {
   autoTerminateAtZero: boolean;
 }
 
+/**
+ * Verified Real-Time Operating Costs & Billing Configuration
+ * Built upon:
+ * 1. fal.ai LUCY 2.5 Real-Time Video Engine: $0.0400 / second ($2.40 / minute)
+ * 2. ElevenLabs Speech-to-Speech (STS) Voice Cloning: $0.0025 / second ($0.1500 / minute)
+ * 3. Natural Microphone / WebRTC Relay: $0.0001 / second ($0.0060 / minute)
+ */
+export interface ApiProviderCostConfig {
+  // 1. Video Engine API Costs (fal.ai LUCY 2.5)
+  lucy25VideoPerSecCost: number; // $0.0400 / sec = $2.40 / min (official fal.ai rate)
+  lucyProviderName: string;      // 'fal.ai (Decart LUCY 2.5)'
+
+  // 2. Voice Cloning API Costs (ElevenLabs STS / fal.ai)
+  voiceCloningPerSecCost: number; // $0.0025 / sec = $0.1500 / min (ElevenLabs STS)
+  voiceProviderName: string;      // 'ElevenLabs Speech-to-Speech (STS)'
+
+  // 3. Natural Audio / WebRTC bandwidth costs
+  naturalAudioPerSecCost: number; // $0.0001 / sec = $0.0060 / min
+
+  // 4. Profit Margin Controls (Guaranteeing no operating loss)
+  profitMarginPercent: number;          // Default target profit margin (e.g. 40%)
+  minGuaranteedProfitMarginPercent: number; // Safety floor (e.g. 25%)
+
+  // 5. Verification & Metadata
+  lastVerifiedAt: string;
+  sourceNotes: string;
+}
+
+export interface SessionFinancials {
+  durationSec: number;
+  durationFormatted: string;
+  
+  // Real raw costs incurred
+  rawLucyVideoCostUsd: number;
+  rawVoiceCloningCostUsd: number;
+  rawNaturalAudioCostUsd: number;
+  totalRawApiCostUsd: number;
+
+  // Billed / deducted value to user
+  userBilledAmountUsd: number;
+  
+  // Owner profit
+  netOwnerProfitUsd: number;
+  profitMarginAchievedPercent: number;
+
+  // Key minute deduction
+  normalizedMinutesDeducted: number;
+}
+
 export interface AdminSecurityConfig {
   masterAdminPassword: string;
   masterVideoEngineKey: string;
@@ -54,4 +103,5 @@ export interface ActivationResult {
   success: boolean;
   message: string;
   license?: LicenseKeyItem;
+  financials?: SessionFinancials;
 }

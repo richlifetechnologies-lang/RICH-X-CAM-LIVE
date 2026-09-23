@@ -23,6 +23,8 @@ export interface LipSyncMetrics {
   rawRms: number;
   sourceType: 'natural_mic' | 'cloned_voice' | 'standby';
   deviceName?: string;
+  autoAdjustedDelayMs?: number; // Automatically calculated latency delay
+  isAutoCalibrated?: boolean;
 }
 
 export interface RichXCallConfig {
@@ -48,8 +50,9 @@ export interface RichXCallConfig {
   // Video Only mode toggle for optional voice cloning
   videoOnlyEnableVoiceCloning?: boolean;
 
-  // Lip-Sync Latency Alignment
-  audioLatencyCompensationMs: number;
+  // Lip-Sync Latency Alignment & Auto Adjustment
+  autoLipSyncCalibration: boolean; // Automatically adjust audio lip sync to match video when speaking
+  audioLatencyCompensationMs: number; // Manual override or current applied latency
   
   // Guardrails
   spendingCapUsd: number;

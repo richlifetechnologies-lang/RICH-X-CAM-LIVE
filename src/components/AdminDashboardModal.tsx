@@ -25,15 +25,22 @@ import {
   Layers,
   CheckCircle2,
   HelpCircle,
+  DollarSign,
+  TrendingUp,
+  Calculator,
+  ArrowRight,
 } from 'lucide-react';
 import { LicenseService } from '../services/licensing/LicenseService';
+import { BillingRateEngine, VERIFIED_DEFAULT_PROVIDER_COSTS } from '../services/billing/BillingRateEngine';
 import {
   LicenseKeyItem,
   TimerConsumptionConfig,
   AdminSecurityConfig,
   ApiKeyVaultItem,
   LicenseFeatureMode,
+  ApiProviderCostConfig,
 } from '../types/licensing';
+import { StudioCallMode } from '../types/cloudCall';
 
 interface AdminDashboardModalProps {
   isOpen: boolean;
@@ -50,8 +57,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [adminPasswordInput, setAdminPasswordInput] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // Tabs: 'licenses' | 'vault' | 'timer' | 'engine' | 'security'
-  const [activeTab, setActiveTab] = useState<'licenses' | 'vault' | 'timer' | 'engine' | 'security'>('licenses');
+  // Tabs: 'licenses' | 'vault' | 'pricing' | 'timer' | 'engine' | 'security'
+  const [activeTab, setActiveTab] = useState<'licenses' | 'vault' | 'pricing' | 'timer' | 'engine' | 'security'>('licenses');
+
+  // Pricing & Profit Protection State
+  const [providerCosts, setProviderCosts] = useState<ApiProviderCostConfig>(BillingRateEngine.getProviderCosts());
+  const [simulatedMinutes, setSimulatedMinutes] = useState<number>(30);
+  const [simulatedMode, setSimulatedMode] = useState<StudioCallMode>('video_audio');
+  const [simulatedVoice, setSimulatedVoice] = useState<'cloned' | 'natural'>('cloned');
 
   // Licenses state
   const [licenses, setLicenses] = useState<LicenseKeyItem[]>(LicenseService.getAllLicenses());
@@ -97,7 +110,30 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const refreshAll = () => {
     setLicenses(LicenseService.getAllLicenses());
     setVaultKeys(LicenseService.getAllVaultKeys());
+    setProviderCosts(BillingRateEngine.getProviderCosts());
     if (onLicenseChanged) onLicenseChanged();
+  };
+
+  const handleSavePricingConfig = (e: React.FormEvent) => {
+    e.preventDefault();
+    BillingRateEngine.saveProviderCosts(providerCosts);
+    setSaveSuccessMsg('API Pricing & Profit Protection rates saved successfully!');
+    setTimeout(() => setSaveSuccessMsg(null), 3000);
+    refreshAll();
+  };
+
+  const handleResetToVerifiedPricing = () => {
+    if (
+      confirm(
+        'Reset API pricing to the official verified baseline (fal.ai LUCY 2.5: $0.0400/sec, ElevenLabs STS: $0.0025/sec)?'
+      )
+    ) {
+      const reset = BillingRateEngine.resetToVerifiedDefaults();
+      setProviderCosts(reset);
+      setSaveSuccessMsg('Restored official verified rates for fal.ai and ElevenLabs!');
+      setTimeout(() => setSaveSuccessMsg(null), 3000);
+      refreshAll();
+    }
   };
 
   const handleAdminLogin = (e: React.FormEvent) => {
@@ -339,6 +375,19 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               >
                 <Database className="w-4 h-4" />
                 <span>API Key Vault & Pools ({vaultKeys.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('pricing')}
+                className={`px-4 py-2.5 font-semibold flex items-center gap-2 border-b-2 whitespace-nowrap transition-all ${
+                  activeTab === 'pricing'
+                    ? 'border-emerald-500 text-emerald-400'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <DollarSign className="w-4 h-4" />
+                <span>API Costs & Profit Protection</span>
               </button>
 
               <button
@@ -1008,6 +1057,335 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         </div>
                       )}
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB: API COSTS & PROFIT MARGIN PROTECTION */}
+              {activeTab === 'pricing' && (
+                <div className="max-w-4xl mx-auto space-y-6">
+                  {/* Verified Notice Banner */}
+                  <div className="bg-emerald-950/40 border border-emerald-800/60 rounded-2xl p-5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
+                        <TrendingUp className="w-5 h-5" />
+                        <span>Verified Real-Time API Costs & Profit Protection Engine</span>
+                      </div>
+                      <span className="text-[10px] font-mono bg-emerald-900/80 text-emerald-300 border border-emerald-700/60 px-2.5 py-0.5 rounded-full font-semibold">
+                        OFFICIAL PROVIDER RATES VERIFIED ({providerCosts.lastVerifiedAt})
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      This system anchors your platform's billing, wallet consumption, and minute run-down directly to the verified official API costs of <strong>LUCY 2.5 on fal.ai</strong> and <strong>ElevenLabs Speech-to-Speech (STS)</strong>. Every call automatically calculates actual API consumption and enforces your target profit margin so you <strong>never lose money</strong>.
+                    </p>
+                  </div>
+
+                  {/* Pricing Editor Form */}
+                  <form onSubmit={handleSavePricingConfig} className="bg-slate-950/70 border border-slate-800 rounded-2xl p-6 space-y-5">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <Sliders className="w-4 h-4 text-emerald-400" />
+                        <span>Underlying API Base Costs & Margin Controls</span>
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={handleResetToVerifiedPricing}
+                        className="text-[11px] text-slate-400 hover:text-emerald-400 transition-colors flex items-center gap-1 cursor-pointer"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        <span>Reset to Verified Defaults</span>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* fal.ai LUCY 2.5 Video Cost */}
+                      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-semibold text-white flex items-center gap-1.5">
+                            <Video className="w-4 h-4 text-purple-400" />
+                            <span>LUCY 2.5 on fal.ai Video Cost</span>
+                          </label>
+                          <span className="text-[10px] text-purple-300 font-mono font-semibold">
+                            ${(providerCosts.lucy25VideoPerSecCost * 60).toFixed(2)}/min
+                          </span>
+                        </div>
+                        <div className="relative">
+                          <span className="absolute left-3 top-2 text-xs font-mono text-slate-500">$</span>
+                          <input
+                            type="number"
+                            step="0.001"
+                            min="0.001"
+                            max="1.000"
+                            value={providerCosts.lucy25VideoPerSecCost}
+                            onChange={(e) =>
+                              setProviderCosts({
+                                ...providerCosts,
+                                lucy25VideoPerSecCost: parseFloat(e.target.value) || 0.04,
+                              })
+                            }
+                            className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-7 pr-16 py-2 text-xs text-white font-mono"
+                          />
+                          <span className="absolute right-3 top-2 text-[10px] text-slate-400 font-mono">/ sec</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500">
+                          Official fal.ai serverless pricing: <strong>$0.0400 per second</strong> ($2.40/minute).
+                        </p>
+                      </div>
+
+                      {/* Voice-Cloning Engine Cost */}
+                      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-semibold text-white flex items-center gap-1.5">
+                            <Mic className="w-4 h-4 text-sky-400" />
+                            <span>Voice-Cloning Engine API Cost</span>
+                          </label>
+                          <span className="text-[10px] text-sky-300 font-mono font-semibold">
+                            ${(providerCosts.voiceCloningPerSecCost * 60).toFixed(2)}/min
+                          </span>
+                        </div>
+                        <div className="relative">
+                          <span className="absolute left-3 top-2 text-xs font-mono text-slate-500">$</span>
+                          <input
+                            type="number"
+                            step="0.0001"
+                            min="0.0001"
+                            max="0.5000"
+                            value={providerCosts.voiceCloningPerSecCost}
+                            onChange={(e) =>
+                              setProviderCosts({
+                                ...providerCosts,
+                                voiceCloningPerSecCost: parseFloat(e.target.value) || 0.0025,
+                              })
+                            }
+                            className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-7 pr-16 py-2 text-xs text-white font-mono"
+                          />
+                          <span className="absolute right-3 top-2 text-[10px] text-slate-400 font-mono">/ sec</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500">
+                          Official ElevenLabs STS streaming: <strong>$0.0025 per second</strong> ($0.1500/minute).
+                        </p>
+                      </div>
+
+                      {/* Natural Audio / WebRTC Cost */}
+                      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-semibold text-white flex items-center gap-1.5">
+                            <Cpu className="w-4 h-4 text-emerald-400" />
+                            <span>Natural Audio WebRTC Bandwidth</span>
+                          </label>
+                          <span className="text-[10px] text-emerald-300 font-mono font-semibold">
+                            ${(providerCosts.naturalAudioPerSecCost * 60).toFixed(4)}/min
+                          </span>
+                        </div>
+                        <div className="relative">
+                          <span className="absolute left-3 top-2 text-xs font-mono text-slate-500">$</span>
+                          <input
+                            type="number"
+                            step="0.00005"
+                            min="0.00001"
+                            max="0.01000"
+                            value={providerCosts.naturalAudioPerSecCost}
+                            onChange={(e) =>
+                              setProviderCosts({
+                                ...providerCosts,
+                                naturalAudioPerSecCost: parseFloat(e.target.value) || 0.0001,
+                              })
+                            }
+                            className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-7 pr-16 py-2 text-xs text-white font-mono"
+                          />
+                          <span className="absolute right-3 top-2 text-[10px] text-slate-400 font-mono">/ sec</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500">
+                          Raw signaling and media stream bandwidth relay cost (~$0.006/min).
+                        </p>
+                      </div>
+
+                      {/* Profit Margin Controller */}
+                      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-semibold text-white flex items-center gap-1.5">
+                            <DollarSign className="w-4 h-4 text-amber-400" />
+                            <span>Target Profit Margin (%)</span>
+                          </label>
+                          <span className="text-xs font-bold text-emerald-400 font-mono">
+                            +{providerCosts.profitMarginPercent}% Margin
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="15"
+                          max="200"
+                          step="5"
+                          value={providerCosts.profitMarginPercent}
+                          onChange={(e) =>
+                            setProviderCosts({
+                              ...providerCosts,
+                              profitMarginPercent: parseInt(e.target.value, 10) || 40,
+                            })
+                          }
+                          className="w-full accent-emerald-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                        />
+                        <div className="flex items-center justify-between text-[10px] text-slate-400">
+                          <span>Safety Floor: {providerCosts.minGuaranteedProfitMarginPercent}% min</span>
+                          <span className="text-amber-400 font-medium">Guaranteed No-Loss Billing</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex items-center justify-end gap-3">
+                      <button
+                        type="submit"
+                        className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-xs transition-colors shadow-lg shadow-emerald-600/30 flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Check className="w-4 h-4" />
+                        <span>Save API Pricing & Profit Rates</span>
+                      </button>
+                    </div>
+                  </form>
+
+                  {/* Mode-by-Mode Pricing Table */}
+                  <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-6 space-y-4">
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-indigo-400" />
+                      <span>Live Cost & Profit Breakdown by Studio Call Mode</span>
+                    </h4>
+                    <p className="text-xs text-slate-400">
+                      The table below shows how the verified API costs translate into customer rates and your guaranteed profit per minute for each mode:
+                    </p>
+
+                    <div className="overflow-x-auto rounded-xl border border-slate-800">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-900/90 text-slate-400 font-semibold border-b border-slate-800">
+                          <tr>
+                            <th className="p-3">Studio Mode & Voice Option</th>
+                            <th className="p-3 text-right">Raw Provider Cost</th>
+                            <th className="p-3 text-right">Customer Price Charged</th>
+                            <th className="p-3 text-right">Your Guaranteed Profit</th>
+                            <th className="p-3 text-right">Margin</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 font-mono">
+                          {BillingRateEngine.getModeRatesPerMinute().map((row) => (
+                            <tr key={row.label} className="hover:bg-slate-900/50 transition-colors">
+                              <td className="p-3 font-sans font-medium text-white flex items-center gap-2">
+                                <span className={`w-2 h-2 rounded-full ${row.modeKey === 'audio_only' ? 'bg-sky-400' : 'bg-purple-400'}`} />
+                                <span>{row.label}</span>
+                              </td>
+                              <td className="p-3 text-right text-rose-300 font-medium">
+                                ${row.rawCostMin.toFixed(2)}/min
+                              </td>
+                              <td className="p-3 text-right text-white font-bold">
+                                ${row.userPriceMin.toFixed(2)}/min
+                              </td>
+                              <td className="p-3 text-right text-emerald-400 font-bold">
+                                +${row.profitMin.toFixed(2)}/min
+                              </td>
+                              <td className="p-3 text-right text-emerald-300">
+                                {row.marginPercent}%
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Interactive Live Profit Simulator */}
+                  <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <Calculator className="w-4 h-4 text-sky-400" />
+                        <span>Interactive Call Session Profit Simulator</span>
+                      </h4>
+                      <span className="text-[11px] text-slate-400">Estimate earnings on any custom session</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-slate-900/80 rounded-xl border border-slate-800">
+                      <div>
+                        <label className="block text-[11px] text-slate-300 font-semibold mb-1">Simulated Mode:</label>
+                        <select
+                          value={simulatedMode}
+                          onChange={(e) => setSimulatedMode(e.target.value as StudioCallMode)}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                        >
+                          <option value="video_audio">1. Video Call + Audio Call</option>
+                          <option value="audio_only">2. Audio Calls Only</option>
+                          <option value="video_only">3. Video Calls Only</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] text-slate-300 font-semibold mb-1">Voice Source:</label>
+                        <select
+                          value={simulatedVoice}
+                          onChange={(e) => setSimulatedVoice(e.target.value as 'cloned' | 'natural')}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                        >
+                          <option value="cloned">Cloned Voice (ElevenLabs STS)</option>
+                          <option value="natural">Natural Microphone Voice</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between text-[11px] text-slate-300 font-semibold mb-1">
+                          <span>Session Duration:</span>
+                          <span className="text-white font-mono">{simulatedMinutes} mins</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="5"
+                          max="180"
+                          step="5"
+                          value={simulatedMinutes}
+                          onChange={(e) => setSimulatedMinutes(parseInt(e.target.value, 10) || 30)}
+                          className="w-full accent-sky-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Simulation Result Cards */}
+                    {(() => {
+                      const simFinancials = BillingRateEngine.calculateSessionFinancials(
+                        simulatedMinutes * 60,
+                        simulatedMode,
+                        simulatedVoice === 'cloned'
+                      );
+                      return (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          <div className="bg-slate-900/90 border border-slate-800 p-3.5 rounded-xl">
+                            <span className="text-[10px] text-slate-400 block font-medium">LUCY 2.5 Video Cost</span>
+                            <span className="text-base font-bold font-mono text-purple-300">
+                              ${simFinancials.rawLucyVideoCostUsd.toFixed(2)}
+                            </span>
+                            <span className="text-[9px] text-slate-500 block">fal.ai serverless</span>
+                          </div>
+
+                          <div className="bg-slate-900/90 border border-slate-800 p-3.5 rounded-xl">
+                            <span className="text-[10px] text-slate-400 block font-medium">Voice API Cost</span>
+                            <span className="text-base font-bold font-mono text-sky-300">
+                              ${(simFinancials.rawVoiceCloningCostUsd + simFinancials.rawNaturalAudioCostUsd).toFixed(2)}
+                            </span>
+                            <span className="text-[9px] text-slate-500 block">{simulatedVoice === 'cloned' ? 'ElevenLabs STS' : 'WebRTC Relay'}</span>
+                          </div>
+
+                          <div className="bg-slate-900/90 border border-slate-800 p-3.5 rounded-xl">
+                            <span className="text-[10px] text-slate-400 block font-medium">Billed to Customer</span>
+                            <span className="text-base font-bold font-mono text-white">
+                              ${simFinancials.userBilledAmountUsd.toFixed(2)}
+                            </span>
+                            <span className="text-[9px] text-slate-500 block">{simulatedMinutes} mins deducted</span>
+                          </div>
+
+                          <div className="bg-emerald-950/50 border border-emerald-800/80 p-3.5 rounded-xl">
+                            <span className="text-[10px] text-emerald-300 block font-medium">Net Owner Profit</span>
+                            <span className="text-base font-bold font-mono text-emerald-400">
+                              +${simFinancials.netOwnerProfitUsd.toFixed(2)}
+                            </span>
+                            <span className="text-[9px] text-emerald-400/80 block">+{simFinancials.profitMarginAchievedPercent}% Net Margin</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               )}

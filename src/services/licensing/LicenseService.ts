@@ -5,7 +5,10 @@ import {
   ActivationResult,
   ApiKeyVaultItem,
   LicenseFeatureMode,
+  SessionFinancials,
 } from '../../types/licensing';
+import { StudioCallMode } from '../../types/cloudCall';
+import { BillingRateEngine } from '../billing/BillingRateEngine';
 
 const STORAGE_LICENSES = 'richx_cam_licenses_registry_v1';
 const STORAGE_CURRENT_LICENSE = 'richx_cam_active_client_license_v1';
@@ -521,26 +524,35 @@ export class LicenseService {
     }
   }
 
-  // --- USAGE DEDUCTION (TICK BY TICK) ---
-  public static deductUsageSecond(secondsSpent = 1, isClonedVoice = false): { remainingMinutes: number; shouldTerminate: boolean } {
+  // --- USAGE DEDUCTION (TICK BY TICK WITH VERIFIED API COSTS) ---
+  public static deductUsageSecond(
+    secondsSpent = 1,
+    isClonedVoice = false,
+    mode: StudioCallMode = 'video_audio'
+  ): {
+    remainingMinutes: number;
+    shouldTerminate: boolean;
+    financials: SessionFinancials;
+  } {
+    const financials = BillingRateEngine.calculateSessionFinancials(secondsSpent, mode, isClonedVoice);
     const current = this.getActiveClientLicense();
     if (!current) {
-      return { remainingMinutes: 0, shouldTerminate: true };
+      return { remainingMinutes: 0, shouldTerminate: true, financials };
     }
 
     if (current.isUnlimited) {
-      return { remainingMinutes: 999999, shouldTerminate: false };
+      return { remainingMinutes: 999999, shouldTerminate: false, financials };
     }
 
     const timerConfig = this.getTimerConfig();
-    const multiplier = isClonedVoice ? timerConfig.clonedVoiceRateMultiplier : timerConfig.videoOnlyRateMultiplier;
-    const effectiveSeconds = secondsSpent * multiplier;
+    const dynamicMultiplier = BillingRateEngine.getMinuteConsumptionMultiplier(mode, isClonedVoice, current.featureMode);
+    const effectiveSeconds = secondsSpent * dynamicMultiplier;
     const minutesToDeduct = effectiveSeconds / 60;
 
     const all = this.getAllLicenses();
     const master = all.find((l) => l.key === current.key);
     if (!master) {
-      return { remainingMinutes: 0, shouldTerminate: true };
+      return { remainingMinutes: 0, shouldTerminate: true, financials };
     }
 
     master.usedMinutes = +(master.usedMinutes + minutesToDeduct).toFixed(2);
@@ -562,6 +574,7 @@ export class LicenseService {
     return {
       remainingMinutes: master.remainingMinutes,
       shouldTerminate,
+      financials,
     };
   }
 

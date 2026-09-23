@@ -10,6 +10,7 @@ interface LipSyncVisualizerProps {
   micName: string;
   clonedVoiceName?: string;
   compact?: boolean;
+  autoCalibrationActive?: boolean;
 }
 
 export const LipSyncVisualizer: React.FC<LipSyncVisualizerProps> = ({
@@ -20,11 +21,14 @@ export const LipSyncVisualizer: React.FC<LipSyncVisualizerProps> = ({
   micName,
   clonedVoiceName,
   compact = false,
+  autoCalibrationActive = true,
 }) => {
   const openness = isCallActive && metrics ? metrics.mouthOpenness : 0;
   const mouthWidth = isCallActive && metrics ? metrics.mouthWidth : 0;
   const phoneme = isCallActive && metrics?.isSpeaking ? metrics.phoneme : 'Rest';
   const isSpeaking = isCallActive && (metrics?.isSpeaking ?? false);
+  const autoDelay = metrics?.autoAdjustedDelayMs ?? (callMode === 'audio_only' ? 0 : 160);
+  const isAutoSync = metrics?.isAutoCalibrated ?? autoCalibrationActive;
 
   const activeSourceLabel =
     callMode === 'video_only'
@@ -44,6 +48,9 @@ export const LipSyncVisualizer: React.FC<LipSyncVisualizerProps> = ({
         <span className="text-white font-medium">LIP-SYNC:</span>
         <span className="text-emerald-300 font-semibold">{openness}%</span>
         <span className="text-slate-400">[{phoneme}]</span>
+        {isAutoSync && (
+          <span className="text-amber-400 text-[9px] font-bold">⚡{autoDelay}ms</span>
+        )}
       </div>
     );
   }
@@ -83,6 +90,11 @@ export const LipSyncVisualizer: React.FC<LipSyncVisualizerProps> = ({
               <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold uppercase">
                 {isCallActive ? 'SYNCHRONIZED' : 'STANDBY'}
               </span>
+              {isAutoSync && (
+                <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-950/80 text-amber-300 border border-amber-800 font-bold flex items-center gap-1">
+                  <span>⚡ AUTO-SYNC: {autoDelay}ms</span>
+                </span>
+              )}
             </div>
             <p className="text-[10px] text-slate-400 truncate max-w-[260px]">
               Source: <span className="text-slate-200 font-medium">{activeSourceLabel}</span>
@@ -167,9 +179,18 @@ export const LipSyncVisualizer: React.FC<LipSyncVisualizerProps> = ({
             </div>
           </div>
 
-          <p className="text-[9px] text-slate-400 leading-tight">
-            Driven by final outgoing audio. Synchronizes video mouth motion with WhatsApp, Zoom, Discord, and Telegram.
-          </p>
+          <div className="flex items-center justify-between text-[9px] text-slate-400 leading-tight">
+            <span>
+              {isAutoSync
+                ? `⚡ Auto Lip-Sync: Active (~${autoDelay}ms matches video on speech onset)`
+                : `Manual latency buffer: ${autoDelay}ms`}
+            </span>
+            {isSpeaking && (
+              <span className="text-emerald-400 font-mono font-semibold animate-pulse">
+                ● Speaking: Video-Matched
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </div>

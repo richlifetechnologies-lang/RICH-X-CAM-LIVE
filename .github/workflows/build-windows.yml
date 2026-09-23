@@ -54,16 +54,35 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         with:
-          tag_name: v1.2.1
-          name: "RICH X CAM LIVE v1.2.1 — Windows Setup Installer (.exe)"
+          tag_name: v1.2.2
+          name: "RICH X CAM LIVE v1.2.2 — Windows Setup Installer (.exe)"
           draft: false
           prerelease: false
           generate_release_notes: true
           body: |
-            # RICH X CAM LIVE v1.2.1 for Windows 10 & 11
+            # RICH X CAM LIVE v1.2.2 for Windows 10 & 11
+
+            ### Critical Fix: Realtime Call Start & Resilient fal.ai Gateway
+            - **Resolved "Call failed: the built-in API server is not reachable / Failed to execute fetch on Window"**:
+              - Added native Electron IPC gateway (`fal-token`, `fal-upload-image`, `fal-status`) running directly in the desktop process. Bypasses localhost port binding, CORS restrictions, `file://` protocol URL limitations, and antivirus/firewall blocks.
+              - Added multi-tier FalGateway with automatic fallback: Electron IPC -> Local API proxy -> Direct official fal.ai CORS client gateway.
+              - Bound local server to `127.0.0.1` loopback instead of `0.0.0.0`, preventing Windows Defender Firewall alerts.
+              - Preflight readiness check now validates credential configuration safely without throwing unhandled fetch exceptions.
+
+            ### Virtual Camera & Audio Drivers
+            - Bundles direct native **RICHX CAM** DirectShow virtual camera and **RICHX MIC** bridge drivers.
+            - Setup script automatically registers devices into Windows Registry so they appear in Zoom, WhatsApp, Teams, Google Meet, Discord, etc.
+
+            ### Downloads:
+            - **Standard Windows Setup Wizard**: `RICH-X-CAM-LIVE-Setup-1.2.2.exe`
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            # RICH X CAM LIVE v1.2.2 for Windows 10 & 11
 
             ### 🚀 Direct Windows Download:
-            - **Standard Windows Setup Wizard**: `RICH-X-CAM-LIVE-Setup-1.2.1.exe`
+            - **Standard Windows Setup Wizard**: `RICH-X-CAM-LIVE-Setup-1.2.2.exe`
               - Full standard installation wizard with custom destination drive/folder selection.
               - Desktop logo icon and Start Menu shortcuts automatically installed.
 

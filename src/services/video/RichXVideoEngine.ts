@@ -1,3 +1,4 @@
+import { uploadReferenceImage, fetchFalClientToken } from "./FalGateway";
 import { fal } from '@fal-ai/client';
 import { VideoOrientation } from '../../types/cloudCall';
 
@@ -158,39 +159,7 @@ export class RichXVideoEngine {
    * Uploads an image (base64 or URL) to fal.ai CDN storage to provide a clean hosted URL for LUCY 2.5
    */
   public async prepareReferenceImageUrl(imageUrl: string, apiKey?: string): Promise<string> {
-    if (!imageUrl) return '';
-    if (imageUrl.startsWith('https://v3.fal.media') || imageUrl.startsWith('https://fal.media')) {
-      return imageUrl;
-    }
-
-    try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (apiKey) {
-        headers['x-fal-key'] = apiKey;
-      }
-
-      const res = await fetch('/api/fal/upload-image', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          image: imageUrl,
-          fileName: `richx-avatar-${Date.now()}.jpg`,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.file_url) {
-          return data.file_url;
-        }
-      }
-    } catch (err) {
-      console.warn('Could not upload image via server route, using input directly:', err);
-    }
-
-    return imageUrl;
+    return uploadReferenceImage(imageUrl, apiKey);
   }
 
   /**
@@ -233,38 +202,10 @@ export class RichXVideoEngine {
     const processedImageUrl = await this.prepareReferenceImageUrl(referenceImageUrl, apiKey);
     this.currentImageUrl = processedImageUrl;
 
-    // 3. Mint short-lived client token from server proxy
+    // 3. Obtain authentication token via resilient FalGateway (IPC -> HTTP Proxy -> Direct CORS)
     onStatusChange('RICH X CAM: Authenticating with fal.ai realtime gateway...');
-    const handshakeHeaders: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (apiKey && apiKey.trim()) {
-      handshakeHeaders['x-fal-key'] = apiKey.trim();
-    }
-
-    const tokenRes = await fetch('/api/fal/token', {
-      method: 'POST',
-      headers: handshakeHeaders,
-    });
-
-    if (!tokenRes.ok) {
-      const errJson = await tokenRes.json().catch(() => ({}));
-      if (tokenRes.status === 401 || tokenRes.status === 403) {
-        throw new Error(
-          errJson.error ||
-            'Missing or invalid FAL_KEY. Please provide both Key ID and Key Secret in the Admin Dashboard (Ctrl+Shift+A) or server environment.'
-        );
-      }
-      throw new Error(
-        errJson.error || `fal.ai authentication failed with status ${tokenRes.status}`
-      );
-    }
-
-    const { token } = await tokenRes.json();
-    if (!token) {
-      throw new Error('Received invalid authentication response from fal.ai gateway.');
-    }
-
+    const token = await fetchFalClientToken(apiKey);
+    
     onStatusChange('RICH X CAM: Connecting to fal.ai LUCY 2.5 Realtime signaling relay...');
 
     try {

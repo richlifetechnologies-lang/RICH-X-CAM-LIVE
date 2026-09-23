@@ -257,6 +257,114 @@ $knownVirtualAudio = @($audioEndpoints | Where-Object { $_ -match 'CABLE|VB-Audi
   }
 });
 
+
+// Native IPC Handlers for fal.ai Gateway (Fail-Safe: bypasses loopback port, firewall, and CORS)
+ipcMain.handle("fal-token", async (event, { apiKey }) => {
+  const falKey = (apiKey || process.env.FAL_KEY || process.env.VITE_FAL_KEY || "").trim();
+  if (!falKey) {
+    return {
+      success: false,
+      error: "Missing FAL_KEY. Please provide Key ID and Key Secret in Admin Dashboard (Ctrl+Shift+A) or server environment.",
+    };
+  }
+
+  try {
+    const authHeader = falKey.startsWith("Key ") ? falKey : `Key ${falKey}`;
+    const response = await fetch("https://rest.fal.ai/tokens/", {
+      method: "POST",
+      headers: {
+        Authorization: authHeader,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        allowed_apps: ["decart/lucy-2-5", "decart/lucy-2-5/realtime", "lucy-2-5"],
+        token_expiration: 300,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => "");
+      return {
+        success: false,
+        error: `fal.ai authentication error (${response.status}): ${errText || "Invalid credentials"}`,
+      };
+    }
+
+    const data = await response.json();
+    const token = typeof data === "string" ? data : data.token || data.detail || data;
+    return { success: true, token, expires_in: 300 };
+  } catch (err) {
+    return { success: false, error: err.message || "Error generating fal.ai token" };
+  }
+});
+
+ipcMain.handle("fal-upload-image", async (event, { apiKey, image, fileName = "avatar-identity.jpg" }) => {
+  const falKey = (apiKey || process.env.FAL_KEY || process.env.VITE_FAL_KEY || "").trim();
+  if (!image) {
+    return { success: false, error: "Image data is required" };
+  }
+  if (!falKey) {
+    return { success: true, file_url: image };
+  }
+
+  try {
+    let mimeType = "image/jpeg";
+    let base64Data = image;
+    if (image.startsWith("data:")) {
+      const matches = image.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (matches && matches.length === 3) {
+        mimeType = matches[1];
+        base64Data = matches[2];
+      }
+    }
+    const buffer = Buffer.from(base64Data, "base64");
+    const authHeader = falKey.startsWith("Key ") ? falKey : `Key ${falKey}`;
+
+    const initRes = await fetch("https://rest.fal.ai/storage/upload/initiate?storage_type=fal-cdn-v3", {
+      method: "POST",
+      headers: {
+        Authorization: authHeader,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        content_type: mimeType,
+        file_name: fileName,
+      }),
+    });
+
+    if (!initRes.ok) {
+      return { success: true, file_url: image, warning: "Storage initiate failed, fallback to Data URI" };
+    }
+
+    const { upload_url, file_url } = await initRes.json();
+    const putRes = await fetch(upload_url, {
+      method: "PUT",
+      headers: { "Content-Type": mimeType },
+      body: buffer,
+    });
+
+    if (!putRes.ok) {
+      return { success: true, file_url: image, warning: "Storage PUT failed" };
+    }
+
+    return { success: true, file_url };
+  } catch (err) {
+    return { success: true, file_url: image, warning: err.message };
+  }
+});
+
+ipcMain.handle("fal-status", async () => {
+  return {
+    configured: Boolean(process.env.FAL_KEY || process.env.VITE_FAL_KEY),
+    ready: true,
+    model: "decart/lucy-2-5/realtime",
+  };
+});
+
+ipcMain.handle("get-api-base-url", async () => {
+  return API_BASE;
+});
+
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
 if (!gotSingleInstanceLock) {

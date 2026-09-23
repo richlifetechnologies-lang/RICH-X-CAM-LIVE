@@ -57,6 +57,7 @@ import { UniversalLipSyncCalibration } from './components/UniversalLipSyncCalibr
 import { LicenseService } from './services/licensing/LicenseService';
 import { LicenseKeyItem, SessionFinancials } from './types/licensing';
 import { BillingRateEngine } from './services/billing/BillingRateEngine';
+import { checkGatewayReadiness } from './services/video/FalGateway';
 
 interface StopServiceButtonProps {
   isCallActive: boolean;
@@ -319,20 +320,28 @@ export default function App() {
     const keysInfo = LicenseService.getEffectiveKeysForLicense(license);
 
     try {
-      // Preflight: the bundled API server must be reachable or every fal.ai
-      // proxy call fails with a raw "Failed to fetch" that helps no one.
-      try {
-        const health = await fetch('/api/fal/status');
-        if (!health.ok) throw new Error(`status ${health.status}`);
-      } catch {
-        setCallStatus(
-          'Call failed: the built-in API server is not reachable. Close and reopen RICH X CAM LIVE; if this persists, allow the app in your antivirus/firewall.'
-        );
-        return;
-      }
-
       const isVideoMode = callMode === 'video_audio' || callMode === 'video_only';
       const isAudioOnly = callMode === 'audio_only';
+
+      const effectiveVideoKey =
+        keysInfo.videoKey ||
+        config.videoEngineApiKey ||
+        LicenseService.getAdminConfig().masterVideoEngineKey ||
+        '';
+
+      const effectiveVoiceKey =
+        keysInfo.voiceKey ||
+        config.voiceEngineApiKey ||
+        LicenseService.getAdminConfig().masterVoiceEngineKey ||
+        '';
+
+      if (isVideoMode) {
+        const gatewayCheck = await checkGatewayReadiness(effectiveVideoKey);
+        if (!gatewayCheck.ready) {
+          setCallStatus(gatewayCheck.message || 'Call failed: fal.ai credentials missing or unconfigured.');
+          return;
+        }
+      }
 
       // Determine active voice source based on tab mode
       // Video Calls Only: natural mic by default unless user specifically enabled voice cloning
@@ -340,17 +349,6 @@ export default function App() {
         callMode === 'video_only'
           ? Boolean(config.videoOnlyEnableVoiceCloning && keysInfo.isVoiceAllowed)
           : config.voiceMode === 'cloned_voice' && keysInfo.isVoiceAllowed;
-
-      const effectiveVideoKey =
-        keysInfo.videoKey ||
-        config.videoEngineApiKey ||
-        LicenseService.getAdminConfig().masterVideoEngineKey ||
-        '';
-      const effectiveVoiceKey =
-        keysInfo.voiceKey ||
-        config.voiceEngineApiKey ||
-        LicenseService.getAdminConfig().masterVoiceEngineKey ||
-        '';
 
       setCallStatus(
         isAudioOnly

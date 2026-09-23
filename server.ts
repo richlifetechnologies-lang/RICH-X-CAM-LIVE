@@ -11,7 +11,7 @@ dotenv.config();
 const SERVER_DIR =
   typeof __dirname !== 'undefined'
     ? __dirname
-    : path.dirname(fileURLToPath(import.meta.url));
+    : (typeof import.meta !== 'undefined' && import.meta.url ? path.dirname(fileURLToPath(import.meta.url)) : process.cwd());
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
@@ -238,7 +238,7 @@ async function startServer() {
     });
   }
 
-  const server = app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '127.0.0.1', () => {
     console.log(`RICH X CAM LIVE Server running on http://0.0.0.0:${PORT}`);
   });
 

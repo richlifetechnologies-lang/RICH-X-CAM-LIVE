@@ -214,10 +214,20 @@ ipcMain.handle('check-drivers-status', async () => {
   const psScript = `
 $ErrorActionPreference = 'SilentlyContinue'
 $cams = @(Get-PnpDevice -Class CAMERA | Select-Object -ExpandProperty FriendlyName)
+$dshowCams = @()
+$dshowPath = 'HKLM:\SOFTWARE\Classes\CLSID\{860BB310-5D01-11d0-BD3B-00A0C911CE86}\Instance'
+if (Test-Path $dshowPath) {
+    $dshowCams += Get-ChildItem $dshowPath | ForEach-Object { (Get-ItemProperty $_.PSPath -Name FriendlyName -ErrorAction SilentlyContinue).FriendlyName }
+}
+$dshowPathCU = 'HKCU:\SOFTWARE\Classes\CLSID\{860BB310-5D01-11d0-BD3B-00A0C911CE86}\Instance'
+if (Test-Path $dshowPathCU) {
+    $dshowCams += Get-ChildItem $dshowPathCU | ForEach-Object { (Get-ItemProperty $_.PSPath -Name FriendlyName -ErrorAction SilentlyContinue).FriendlyName }
+}
+$allCams = @($cams + $dshowCams | Where-Object { $_ }) | Select-Object -Unique
 $audioEndpoints = @(Get-PnpDevice -Class AudioEndpoint | Select-Object -ExpandProperty FriendlyName)
-$richxCam = @($cams | Where-Object { $_ -match 'RICHX' })
+$richxCam = @($allCams | Where-Object { $_ -match 'RICHX' })
 $richxMic = @($audioEndpoints | Where-Object { $_ -match 'RICHX MIC' })
-$knownVirtualCams = @($cams | Where-Object { $_ -match 'OBS|Virtual|Camo|DroidCam|ManyCam|XSplit|NVIDIA Broadcast|VDO|IVCam|Droid' })
+$knownVirtualCams = @($allCams | Where-Object { $_ -match 'OBS|Virtual|Camo|DroidCam|ManyCam|XSplit|NVIDIA Broadcast|VDO|IVCam|Droid|Unity|RICHX' })
 $knownVirtualAudio = @($audioEndpoints | Where-Object { $_ -match 'CABLE|VB-Audio|Virtual Audio|VoiceMeeter|RICHX' })
 [PSCustomObject]@{
   cameraInstalled = [bool]($richxCam.Count -gt 0)

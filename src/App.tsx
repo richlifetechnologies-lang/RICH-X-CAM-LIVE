@@ -30,6 +30,7 @@ import {
   Zap,
   DollarSign,
   TrendingUp,
+  Square,
 } from 'lucide-react';
 import {
   RichXCallConfig,
@@ -52,6 +53,56 @@ import { AdminDashboardModal } from './components/AdminDashboardModal';
 import { LicenseService } from './services/licensing/LicenseService';
 import { LicenseKeyItem, SessionFinancials } from './types/licensing';
 import { BillingRateEngine } from './services/billing/BillingRateEngine';
+
+interface StopServiceButtonProps {
+  isCallActive: boolean;
+  onStop: () => void;
+  disabled?: boolean;
+  className?: string;
+  label?: string;
+  subtext?: string;
+}
+
+const StopServiceButton: React.FC<StopServiceButtonProps> = ({
+  isCallActive,
+  onStop,
+  disabled = false,
+  className = '',
+  label = 'STOP SERVICE',
+  subtext,
+}) => {
+  return (
+    <div className={`w-full ${className}`}>
+      <button
+        type="button"
+        onClick={onStop}
+        disabled={disabled}
+        aria-label="Stop active service and timer"
+        className={`w-full py-3 sm:py-3.5 px-4 sm:px-6 rounded-xl font-bold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2.5 transition-all shadow-lg ${
+          disabled
+            ? 'bg-slate-900 border border-slate-800 text-slate-600 opacity-40 cursor-not-allowed'
+            : isCallActive
+            ? 'bg-gradient-to-r from-red-600 via-rose-600 to-red-700 hover:from-red-500 hover:to-rose-600 text-white shadow-red-600/40 ring-2 ring-red-500/50 hover:scale-[1.01] active:scale-[0.99] cursor-pointer animate-pulse'
+            : 'bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/80 hover:border-rose-500/50 cursor-pointer'
+        }`}
+      >
+        <Square className={`w-4 h-4 fill-current ${isCallActive ? 'text-white' : 'text-rose-400'}`} />
+        <span>{label}</span>
+        {isCallActive && (
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-black/40 border border-white/20 text-white font-normal lowercase tracking-normal">
+            active &bull; click to stop
+          </span>
+        )}
+      </button>
+      {isCallActive && (
+        <p className="text-[10px] text-center text-rose-400 font-medium mt-1.5 flex items-center justify-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping inline-block" />
+          {subtext || 'Immediately halts media streams, active API sessions, and stops wallet timer.'}
+        </p>
+      )}
+    </div>
+  );
+};
 
 export default function App() {
   const [config, setConfig] = useState<RichXCallConfig>(CloudCallStore.getConfig());
@@ -399,6 +450,10 @@ export default function App() {
 
   const handleEndCall = () => {
     setIsCallActive(false);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
     videoEngineRef.current.stopStream();
     audioCaptureRef.current.stopCapture();
     audioRoutingRef.current.stop();
@@ -410,7 +465,11 @@ export default function App() {
     setAudioInLevel(0);
     setAudioOutLevel(0);
     setLipSyncMetrics(null);
-    setCallStatus('Live call ended.');
+    setCallStatus('Service stopped immediately. Camera, microphone, and API sessions terminated.');
+  };
+
+  const handleStopService = () => {
+    handleEndCall();
   };
 
   const handleOrientationChange = (orientation: VideoOrientation) => {
@@ -948,7 +1007,16 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Hardware Device Selection */}
+              {/* STOP BUTTON (Beneath user window, ON TOP of camera & microphone selector) */}
+              <StopServiceButton
+                isCallActive={isCallActive}
+                onStop={handleStopService}
+                disabled={!isVideoAudioAllowed && !isCallActive}
+                label="STOP SERVICE (CAMERA, MIC & TIMER)"
+                subtext="Immediately terminates WebRTC video/audio stream, microphone capture, API sessions, and halts wallet timer."
+              />
+
+              {/* Hardware Device Selection (Camera & Microphone - BELOW STOP BUTTON) */}
               <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 shadow-sm">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
@@ -1376,6 +1444,40 @@ export default function App() {
                 </div>
               </div>
 
+              {/* STOP BUTTON (Beneath user window, ON TOP of microphone selector) */}
+              <StopServiceButton
+                isCallActive={isCallActive}
+                onStop={handleStopService}
+                disabled={!isAudioOnlyAllowed && !isCallActive}
+                label="STOP AUDIO SERVICE (MIC & TIMER)"
+                subtext="Immediately terminates microphone capture, voice conversion pipeline, and halts wallet timer."
+              />
+
+              {/* Microphone Selector (Directly Below STOP Button) */}
+              <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 space-y-2 shadow-sm">
+                <label className="block text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
+                  <Mic className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Select Audio Microphone (Below STOP)</span>
+                </label>
+                <select
+                  value={config.selectedMicId}
+                  onChange={(e) => {
+                    const updated = { ...config, selectedMicId: e.target.value };
+                    setConfig(updated);
+                    CloudCallStore.saveConfig(updated);
+                  }}
+                  disabled={isCallActive}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-sky-500"
+                >
+                  <option value="default">Default System Microphone</option>
+                  {availableMics.map((m) => (
+                    <option key={m.deviceId} value={m.deviceId}>
+                      {m.label || `Microphone (${m.deviceId.slice(0, 6)})`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Real-Time Audio Telemetry & Lip-Sync Formants */}
               <LipSyncVisualizer
                 metrics={lipSyncMetrics}
@@ -1472,7 +1574,16 @@ export default function App() {
 
             {/* Right Column: Audio Hardware & Voice Options (5 Cols) */}
             <div className="lg:col-span-5 space-y-4">
-              {/* Microphone Selector */}
+              {/* STOP BUTTON (On top of microphone selector) */}
+              <StopServiceButton
+                isCallActive={isCallActive}
+                onStop={handleStopService}
+                disabled={!isAudioOnlyAllowed && !isCallActive}
+                label="STOP AUDIO SERVICE"
+                subtext="Halt audio streaming and wallet timer."
+              />
+
+              {/* Microphone Selector (BELOW STOP BUTTON) */}
               <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-2.5">
                 <label className="block text-xs font-semibold text-white flex items-center gap-1.5">
                   <Mic className="w-4 h-4 text-sky-400" />
@@ -1777,6 +1888,66 @@ export default function App() {
                 </div>
               </div>
 
+              {/* STOP BUTTON (Beneath user window, ON TOP of camera & microphone selector) */}
+              <StopServiceButton
+                isCallActive={isCallActive}
+                onStop={handleStopService}
+                disabled={!isVideoOnlyAllowed && !isCallActive}
+                label="STOP VIDEO SERVICE (CAMERA, MIC & TIMER)"
+                subtext="Immediately terminates WebRTC video/audio stream, microphone capture, API sessions, and halts wallet timer."
+              />
+
+              {/* Hardware Device Selection (Camera & Microphone - BELOW STOP BUTTON) */}
+              <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 shadow-sm">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
+                    <Camera className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Select Webcam Device</span>
+                  </label>
+                  <select
+                    value={config.selectedCameraId}
+                    onChange={(e) => {
+                      const updated = { ...config, selectedCameraId: e.target.value };
+                      setConfig(updated);
+                      CloudCallStore.saveConfig(updated);
+                    }}
+                    disabled={isCallActive}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500"
+                  >
+                    <option value="default">Default Physical Webcam</option>
+                    {availableCameras.map((c) => (
+                      <option key={c.deviceId} value={c.deviceId}>
+                        {c.label || `Camera (${c.deviceId.slice(0, 6)})`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
+                    <Mic className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Select Detected Microphone</span>
+                  </label>
+                  <select
+                    value={config.selectedMicId}
+                    onChange={(e) => {
+                      const updated = { ...config, selectedMicId: e.target.value };
+                      setConfig(updated);
+                      CloudCallStore.saveConfig(updated);
+                    }}
+                    disabled={isCallActive}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500"
+                  >
+                    <option value="default">Default System Microphone</option>
+                    {availableMics.map((m) => (
+                      <option key={m.deviceId} value={m.deviceId}>
+                        {m.label || `Microphone (${m.deviceId.slice(0, 6)})`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               {/* Persona Prompt */}
               <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-2">
                 <div className="flex items-center justify-between text-xs">
@@ -1891,6 +2062,15 @@ export default function App() {
 
             {/* Right Column: Video Only Hardware & Detected Mic Selector (5 Cols) */}
             <div className="lg:col-span-5 space-y-4">
+              {/* STOP BUTTON (On top of camera and microphone selectors) */}
+              <StopServiceButton
+                isCallActive={isCallActive}
+                onStop={handleStopService}
+                disabled={!isVideoOnlyAllowed && !isCallActive}
+                label="STOP VIDEO SERVICE"
+                subtext="Halt video streaming and wallet timer."
+              />
+
               {/* Webcam Device Selection */}
               <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-2">
                 <label className="block text-xs font-semibold text-white flex items-center gap-1.5">

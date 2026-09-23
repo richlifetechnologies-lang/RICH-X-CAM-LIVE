@@ -745,19 +745,19 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => handleOrientationChange('landscape')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
                       !isPortrait
                         ? 'bg-indigo-600 text-white shadow'
                         : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
                     }`}
                   >
                     <Monitor className="w-3.5 h-3.5" />
-                    <span>16:9 PC Webcam</span>
+                    <span>16:9 PC Webcam (Landscape)</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => handleOrientationChange('portrait')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
                       isPortrait
                         ? 'bg-indigo-600 text-white shadow'
                         : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
@@ -1467,31 +1467,31 @@ export default function App() {
             <div className={`grid grid-cols-1 lg:grid-cols-12 gap-6 ${!isVideoOnlyAllowed ? 'opacity-40 grayscale pointer-events-none select-none cursor-not-allowed' : ''}`}>
             {/* Left Column: Stage Viewport & Video Controls (7 Cols) */}
             <div className="lg:col-span-7 space-y-4">
-              {/* Orientation Switcher */}
+              {/* Orientation Mode Switcher */}
               <div className="flex items-center justify-between bg-slate-900/80 border border-slate-800 rounded-xl p-3">
                 <div className="flex items-center gap-2">
-                  <Camera className="w-4 h-4 text-purple-400" />
-                  <span className="text-xs font-bold text-white">Video Mode: Video Calls Only</span>
+                  <Video className="w-4 h-4 text-purple-400" />
+                  <span className="text-xs font-bold text-white">Video Display Orientation:</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => handleOrientationChange('landscape')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
                       !isPortrait
-                        ? 'bg-purple-600 text-white shadow'
+                        ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
                         : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
                     }`}
                   >
                     <Monitor className="w-3.5 h-3.5" />
-                    <span>16:9 PC Webcam</span>
+                    <span>16:9 PC Webcam (Landscape)</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => handleOrientationChange('portrait')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
                       isPortrait
-                        ? 'bg-purple-600 text-white shadow'
+                        ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
                         : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
                     }`}
                   >

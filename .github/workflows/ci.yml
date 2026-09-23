@@ -1,0 +1,56 @@
+name: Build and Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run build command
+        run: npm run build
+
+      - name: Notify on failure (GitHub Annotations & Step Summary)
+        if: failure()
+        run: |
+          echo "::error title=CI Build Failed::Build failed on branch '${{ github.ref_name }}' (commit ${{ github.sha }}) by @${{ github.actor }}."
+          echo "### ❌ Build Failed on \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Details |" >> $GITHUB_STEP_SUMMARY
+          echo "| --- | --- |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Triggered By** | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | [\`${{ github.sha }}\`](https://github.com/${{ github.repository }}/commit/${{ github.sha }}) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Workflow** | \`${{ github.workflow }}\` (#${{ github.run_number }}) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Run Log** | [View Run Details](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> ⚠️ Check the **Run build command** step in the logs for specific compilation or bundling errors." >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify on failure (Webhook Notification)
+        if: failure() && env.WEBHOOK_URL != ''
+        env:
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL || secrets.SLACK_WEBHOOK_URL || secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -s -X POST -H "Content-Type: application/json" \
+            -d "{\"content\": \"🚨 **Build Failed!**\n**Repo:** ${{ github.repository }}\n**Branch:** ${{ github.ref_name }}\n**Commit:** ${{ github.sha }}\n**Actor:** ${{ github.actor }}\n**Run:** https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\", \"text\": \"🚨 Build Failed on ${{ github.repository }} (${{ github.ref_name }}) by ${{ github.actor }}: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+            "$WEBHOOK_URL" || true

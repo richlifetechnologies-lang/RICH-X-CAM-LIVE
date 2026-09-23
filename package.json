@@ -1,7 +1,7 @@
 {
   "name": "rich-x-cam-live",
   "private": true,
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "RICH X CAM LIVE — Real-Time Video Transformation and Voice Conversion Studio",
   "main": "electron/main.cjs",
   "type": "module",
@@ -42,7 +42,7 @@
           ]
         }
       ],
-      "icon": "build/icon.ico",
+      "icon": "public/icon.ico",
       "artifactName": "RICH-X-CAM-LIVE-Setup-${version}.${ext}"
     },
     "nsis": {
@@ -53,9 +53,9 @@
       "createDesktopShortcut": "always",
       "createStartMenuShortcut": true,
       "shortcutName": "RICH X CAM LIVE",
-      "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico",
-      "installerHeaderIcon": "build/icon.ico",
+      "installerIcon": "public/icon.ico",
+      "uninstallerIcon": "public/icon.ico",
+      "installerHeaderIcon": "public/icon.ico",
       "runAfterFinish": true
     }
   },
@@ -80,5 +80,8 @@
     "tsx": "^4.21.0",
     "typescript": "^7.0.2",
     "vite": "^6.2.0"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-win32-x64-msvc": "^4.34.8"
   }
 }

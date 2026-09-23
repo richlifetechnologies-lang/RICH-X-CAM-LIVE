@@ -3,7 +3,7 @@ const path = require('path');
 const { exec, spawn } = require('child_process');
 
 function createWindow() {
-  const iconPath = path.join(__dirname, '..', 'build', 'icon.png');
+  const iconPath = path.join(__dirname, '..', 'public', 'icon.png');
 
   const mainWindow = new BrowserWindow({
     width: 1400,

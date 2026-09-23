@@ -26,12 +26,18 @@ jobs:
           node-version: 22
 
       - name: Install Dependencies
-        run: npm install --legacy-peer-deps
+        shell: pwsh
+        run: |
+          if (Test-Path package-lock.json) { Remove-Item -Force package-lock.json }
+          npm install --legacy-peer-deps
+          npm install @rollup/rollup-win32-x64-msvc --no-save
 
       - name: Build Web Application (Vite)
+        shell: pwsh
         run: npm run build
 
       - name: Build Windows .exe Executables (Installer & Portable)
+        shell: pwsh
         run: npx electron-builder --win --x64 --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -48,21 +54,23 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         with:
-          tag_name: v1.0.2
-          name: "RICH X CAM LIVE v1.0.2 — Windows Setup Installer (.exe)"
+          tag_name: v1.0.3
+          name: "RICH X CAM LIVE v1.0.3 — Windows Setup Installer (.exe)"
           draft: false
           prerelease: false
           generate_release_notes: true
           body: |
-            # RICH X CAM LIVE v1.0.2 for Windows 10 & 11
+            # RICH X CAM LIVE v1.0.3 for Windows 10 & 11
 
             ### 🚀 Direct Windows Download:
-            - **Standard Windows Setup Wizard**: `RICH-X-CAM-LIVE-Setup-1.0.2.exe`
+            - **Standard Windows Setup Wizard**: `RICH-X-CAM-LIVE-Setup-1.0.3.exe`
               - Full standard installation wizard with custom destination drive/folder selection.
               - Desktop logo icon and Start Menu shortcuts automatically installed.
               - Includes **RICHX CAM** DirectShow Virtual Camera and **RICHX MIC** virtual audio driver for WhatsApp, Zoom, Teams, Discord, and Telegram.
 
-            ### ✨ What's New & Synchronized in v1.0.2:
+            ### ✨ What's New & Synchronized in v1.0.3:
+            - **Native Windows Build Fixed**: Resolved Rollup/Vite Windows MSVC compiler binding on GitHub runner.
+            - **Relative Assets Configured**: Configured relative asset base (`./`) for Electron runtime window loading.
             - **Synchronized Video & Voice API Keys on License Generation**:
               - Generating a license key now binds both Video and Voice API keys directly.
               - Full API key synchronization across Video Call + Audio Call, Audio Calls Only, and Video Calls Only studios.

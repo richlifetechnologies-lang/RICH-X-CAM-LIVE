@@ -1,0 +1,73 @@
+name: Build Windows Application (.exe)
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows (.exe)
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Build Web Application (Vite)
+        run: npm run build
+
+      - name: Build Windows .exe Executables (Installer & Portable)
+        run: npx electron-builder --win --x64 --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: RICH-X-CAM-LIVE-Windows-Build
+          path: |
+            release/*.exe
+            release/*.blockmap
+
+      - name: Create GitHub Release with Windows .exe
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
+        with:
+          tag_name: v1.0.0
+          name: "RICH X CAM LIVE v1.0.0 — Windows Release (.exe)"
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            # RICH X CAM LIVE v1.0.0 for Windows 10 & 11
+
+            ### 🚀 Direct Windows Downloads:
+            - **Windows Installer**: `RICH X CAM LIVE-Setup-1.0.0.exe` (Complete Windows installation with desktop shortcut and media device permissions)
+            - **Portable Version**: `RICH X CAM LIVE-Setup-1.0.0.exe` (Run directly without installing)
+
+            ### ✨ What's Included:
+            - **Universal STOP Buttons** across all three studio tabs (instantly halts WebRTC streams, camera/mic capture, active API calls, and timer/wallet billing).
+            - Real-Time **LUCY 2.5 on fal.ai** and **ElevenLabs Voice Cloning** integration with guaranteed profit margin billing safeguards.
+            - **16:9 PC Webcam (Landscape)** and **9:16 Mobile Phone Portrait** orientation modes on Video Calls.
+            - Real-time **Lip-Sync** auto-calibration for natural microphones and cloned voices.
+            - Works seamlessly with WhatsApp, Telegram, Discord, Zoom, Microsoft Teams, and WeChat via virtual camera/mic routing.
+          files: |
+            release/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

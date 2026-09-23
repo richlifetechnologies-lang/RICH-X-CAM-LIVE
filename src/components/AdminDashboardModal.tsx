@@ -19,9 +19,21 @@ import {
   User,
   AlertTriangle,
   Zap,
+  Video,
+  Mic,
+  Settings,
+  Layers,
+  CheckCircle2,
+  HelpCircle,
 } from 'lucide-react';
 import { LicenseService } from '../services/licensing/LicenseService';
-import { LicenseKeyItem, TimerConsumptionConfig, AdminSecurityConfig } from '../types/licensing';
+import {
+  LicenseKeyItem,
+  TimerConsumptionConfig,
+  AdminSecurityConfig,
+  ApiKeyVaultItem,
+  LicenseFeatureMode,
+} from '../types/licensing';
 
 interface AdminDashboardModalProps {
   isOpen: boolean;
@@ -38,11 +50,12 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [adminPasswordInput, setAdminPasswordInput] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // Tabs: 'licenses' | 'timer' | 'engine' | 'security'
-  const [activeTab, setActiveTab] = useState<'licenses' | 'timer' | 'engine' | 'security'>('licenses');
+  // Tabs: 'licenses' | 'vault' | 'timer' | 'engine' | 'security'
+  const [activeTab, setActiveTab] = useState<'licenses' | 'vault' | 'timer' | 'engine' | 'security'>('licenses');
 
   // Licenses state
   const [licenses, setLicenses] = useState<LicenseKeyItem[]>(LicenseService.getAllLicenses());
+  const [vaultKeys, setVaultKeys] = useState<ApiKeyVaultItem[]>(LicenseService.getAllVaultKeys());
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
@@ -51,11 +64,27 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [newAllocatedMinutes, setNewAllocatedMinutes] = useState<number>(60);
   const [isUnlimited, setIsUnlimited] = useState(false);
   const [newNotes, setNewNotes] = useState('');
+  const [newFeatureMode, setNewFeatureMode] = useState<LicenseFeatureMode>('full');
+  const [newAssignedVideoKeyId, setNewAssignedVideoKeyId] = useState<string>('');
+  const [newAssignedVoiceKeyId, setNewAssignedVoiceKeyId] = useState<string>('');
   const [generatedKeyResult, setGeneratedKeyResult] = useState<string | null>(null);
+
+  // Edit / Assign Keys Modal for Existing License
+  const [assigningLicense, setAssigningLicense] = useState<LicenseKeyItem | null>(null);
+  const [editFeatureMode, setEditFeatureMode] = useState<LicenseFeatureMode>('full');
+  const [editAssignedVideoKeyId, setEditAssignedVideoKeyId] = useState<string>('');
+  const [editAssignedVoiceKeyId, setEditAssignedVoiceKeyId] = useState<string>('');
 
   // Minute Top-Up Modal/Prompt state
   const [topUpKey, setTopUpKey] = useState<string | null>(null);
   const [topUpAmount, setTopUpAmount] = useState<number>(30);
+
+  // New Vault Key Form State
+  const [newVaultKeyName, setNewVaultKeyName] = useState('');
+  const [newVaultKeyType, setNewVaultKeyType] = useState<'video' | 'voice'>('video');
+  const [newVaultApiKey, setNewVaultApiKey] = useState('');
+  const [newVaultProvider, setNewVaultProvider] = useState('');
+  const [newVaultNotes, setNewVaultNotes] = useState('');
 
   // Timer & Security configs
   const [timerConfig, setTimerConfig] = useState<TimerConsumptionConfig>(LicenseService.getTimerConfig());
@@ -65,8 +94,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   if (!isOpen) return null;
 
-  const refreshLicenses = () => {
+  const refreshAll = () => {
     setLicenses(LicenseService.getAllLicenses());
+    setVaultKeys(LicenseService.getAllVaultKeys());
     if (onLicenseChanged) onLicenseChanged();
   };
 
@@ -75,7 +105,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     if (LicenseService.verifyAdminPassword(adminPasswordInput)) {
       setIsAuthenticated(true);
       setAuthError(null);
-      refreshLicenses();
+      refreshAll();
     } else {
       setAuthError('Incorrect Master Admin Password. Default is: admin');
     }
@@ -87,12 +117,15 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       newClientName,
       newAllocatedMinutes,
       isUnlimited,
-      newNotes
+      newNotes,
+      newFeatureMode,
+      newAssignedVideoKeyId || null,
+      newAssignedVoiceKeyId || null
     );
     setGeneratedKeyResult(created.key);
     setNewClientName('');
     setNewNotes('');
-    refreshLicenses();
+    refreshAll();
   };
 
   const handleCopy = (text: string) => {
@@ -104,19 +137,19 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const handleUnbindPC = (key: string) => {
     if (confirm(`Unbind Hardware ID from key ${key}? This will allow the customer to activate on a different PC.`)) {
       LicenseService.unbindDevice(key);
-      refreshLicenses();
+      refreshAll();
     }
   };
 
   const handleToggleSuspend = (key: string) => {
     LicenseService.toggleSuspend(key);
-    refreshLicenses();
+    refreshAll();
   };
 
   const handleDeleteKey = (key: string) => {
     if (confirm(`Permanently delete license ${key}?`)) {
       LicenseService.deleteLicense(key);
-      refreshLicenses();
+      refreshAll();
     }
   };
 
@@ -124,7 +157,59 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     if (topUpKey && topUpAmount > 0) {
       LicenseService.addMinutes(topUpKey, topUpAmount);
       setTopUpKey(null);
-      refreshLicenses();
+      refreshAll();
+    }
+  };
+
+  // Assign / Edit Permissions for existing license
+  const openAssignModal = (lic: LicenseKeyItem) => {
+    setAssigningLicense(lic);
+    setEditFeatureMode(lic.featureMode || 'full');
+    setEditAssignedVideoKeyId(lic.assignedVideoKeyId || '');
+    setEditAssignedVoiceKeyId(lic.assignedVoiceKeyId || '');
+  };
+
+  const handleSaveLicensePermissions = () => {
+    if (assigningLicense) {
+      LicenseService.updateLicensePermissions(
+        assigningLicense.key,
+        editFeatureMode,
+        editAssignedVideoKeyId || null,
+        editAssignedVoiceKeyId || null
+      );
+      setAssigningLicense(null);
+      refreshAll();
+      setSaveSuccessMsg(`License ${assigningLicense.key} configuration updated!`);
+      setTimeout(() => setSaveSuccessMsg(null), 2500);
+    }
+  };
+
+  // API Key Vault Handlers
+  const handleAddVaultKey = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newVaultApiKey.trim()) {
+      alert('Please enter an API Key value');
+      return;
+    }
+    LicenseService.addVaultKey(
+      newVaultKeyName,
+      newVaultKeyType,
+      newVaultApiKey,
+      newVaultProvider,
+      newVaultNotes
+    );
+    setNewVaultKeyName('');
+    setNewVaultApiKey('');
+    setNewVaultNotes('');
+    refreshAll();
+    setSaveSuccessMsg(`New ${newVaultKeyType.toUpperCase()} API Key successfully added to vault!`);
+    setTimeout(() => setSaveSuccessMsg(null), 2500);
+  };
+
+  const handleDeleteVaultKey = (id: string, name: string) => {
+    if (confirm(`Delete key "${name}" from vault? Any licenses assigned to this key will revert to master default.`)) {
+      LicenseService.deleteVaultKey(id);
+      refreshAll();
     }
   };
 
@@ -155,9 +240,12 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       (l.boundHardwareId && l.boundHardwareId.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
+  const videoVaultKeys = vaultKeys.filter((k) => k.type === 'video');
+  const voiceVaultKeys = vaultKeys.filter((k) => k.type === 'voice');
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-150">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-6xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-800 bg-slate-950/80 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -172,7 +260,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">
-                Generate Product Keys &bull; Bind & Unbind Hardware IDs &bull; Manage Minute Timers
+                Key Vault &bull; Video/Voice Key Assignment &bull; HWID Binding &bull; Minute Consumption Rules
               </p>
             </div>
           </div>
@@ -226,50 +314,63 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           /* Authenticated Dashboard Content */
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Top Navigation Tabs */}
-            <div className="flex items-center gap-1 px-6 pt-3 border-b border-slate-800 bg-slate-950/40 text-xs">
+            <div className="flex items-center gap-1 px-6 pt-3 border-b border-slate-800 bg-slate-950/40 text-xs overflow-x-auto">
               <button
                 type="button"
                 onClick={() => setActiveTab('licenses')}
-                className={`px-4 py-2.5 font-semibold flex items-center gap-2 border-b-2 transition-all ${
+                className={`px-4 py-2.5 font-semibold flex items-center gap-2 border-b-2 whitespace-nowrap transition-all ${
                   activeTab === 'licenses'
                     ? 'border-indigo-500 text-indigo-400'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
                 }`}
               >
                 <Key className="w-4 h-4" />
-                <span>Product Keys & PC Bindings ({licenses.length})</span>
+                <span>Product Keys & Access ({licenses.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('vault')}
+                className={`px-4 py-2.5 font-semibold flex items-center gap-2 border-b-2 whitespace-nowrap transition-all ${
+                  activeTab === 'vault'
+                    ? 'border-indigo-500 text-indigo-400'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Database className="w-4 h-4" />
+                <span>API Key Vault & Pools ({vaultKeys.length})</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('timer')}
-                className={`px-4 py-2.5 font-semibold flex items-center gap-2 border-b-2 transition-all ${
+                className={`px-4 py-2.5 font-semibold flex items-center gap-2 border-b-2 whitespace-nowrap transition-all ${
                   activeTab === 'timer'
                     ? 'border-indigo-500 text-indigo-400'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
                 }`}
               >
                 <Sliders className="w-4 h-4" />
-                <span>Timer & Minute Consumption</span>
+                <span>Timer & Minute Rules</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('engine')}
-                className={`px-4 py-2.5 font-semibold flex items-center gap-2 border-b-2 transition-all ${
+                className={`px-4 py-2.5 font-semibold flex items-center gap-2 border-b-2 whitespace-nowrap transition-all ${
                   activeTab === 'engine'
                     ? 'border-indigo-500 text-indigo-400'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
                 }`}
               >
                 <Zap className="w-4 h-4" />
-                <span>Master Engine Vault</span>
+                <span>Master Default Keys</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('security')}
-                className={`px-4 py-2.5 font-semibold flex items-center gap-2 border-b-2 transition-all ${
+                className={`px-4 py-2.5 font-semibold flex items-center gap-2 border-b-2 whitespace-nowrap transition-all ${
                   activeTab === 'security'
                     ? 'border-indigo-500 text-indigo-400'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -294,71 +395,134 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               {activeTab === 'licenses' && (
                 <div className="space-y-6">
                   {/* Generator Panel */}
-                  <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+                  <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4 shadow-sm space-y-4">
                     <div className="flex items-center justify-between">
                       <h3 className="text-xs font-bold text-white flex items-center gap-2">
                         <Plus className="w-4 h-4 text-indigo-400" />
-                        <span>Generate New License Key for Customer</span>
+                        <span>Generate Product Key with Custom Mode & Dedicated API Key</span>
                       </h3>
-                      <span className="text-[10px] text-slate-400">Binds to Customer's PC on first entry</span>
+                      <span className="text-[10px] text-slate-400">Configures Video/Voice feature limits & hardware binding</span>
                     </div>
 
-                    <form onSubmit={handleGenerateKey} className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-                      <div className="sm:col-span-4">
-                        <label className="block text-[11px] text-slate-400 mb-1">Customer Name / Identifier</label>
-                        <input
-                          type="text"
-                          value={newClientName}
-                          onChange={(e) => setNewClientName(e.target.value)}
-                          placeholder="e.g. VIP Client Alex"
-                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
-                        />
-                      </div>
-
-                      <div className="sm:col-span-3">
-                        <label className="block text-[11px] text-slate-400 mb-1">Allocated Call Minutes</label>
-                        <div className="flex items-center gap-1.5">
+                    <form onSubmit={handleGenerateKey} className="space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                        <div className="sm:col-span-4">
+                          <label className="block text-[11px] text-slate-400 mb-1">Customer Name / Identifier</label>
                           <input
-                            type="number"
-                            min="5"
-                            max="100000"
-                            step="5"
-                            disabled={isUnlimited}
-                            value={newAllocatedMinutes}
-                            onChange={(e) => setNewAllocatedMinutes(parseInt(e.target.value, 10) || 60)}
-                            className="w-full bg-slate-900 border border-slate-700 disabled:opacity-40 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
+                            type="text"
+                            value={newClientName}
+                            onChange={(e) => setNewClientName(e.target.value)}
+                            placeholder="e.g. VIP Client Alex"
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
                           />
-                          <label className="flex items-center gap-1 text-[10px] text-slate-300 whitespace-nowrap cursor-pointer">
+                        </div>
+
+                        <div className="sm:col-span-3">
+                          <label className="block text-[11px] text-slate-400 mb-1">Allocated Call Minutes</label>
+                          <div className="flex items-center gap-1.5">
                             <input
-                              type="checkbox"
-                              checked={isUnlimited}
-                              onChange={(e) => setIsUnlimited(e.target.checked)}
-                              className="rounded accent-indigo-600"
+                              type="number"
+                              min="5"
+                              max="100000"
+                              step="5"
+                              disabled={isUnlimited}
+                              value={newAllocatedMinutes}
+                              onChange={(e) => setNewAllocatedMinutes(parseInt(e.target.value, 10) || 60)}
+                              className="w-full bg-slate-900 border border-slate-700 disabled:opacity-40 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
                             />
-                            <span>VIP ∞</span>
-                          </label>
+                            <label className="flex items-center gap-1 text-[10px] text-slate-300 whitespace-nowrap cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={isUnlimited}
+                                onChange={(e) => setIsUnlimited(e.target.checked)}
+                                className="rounded accent-indigo-600"
+                              />
+                              <span>VIP ∞</span>
+                            </label>
+                          </div>
+                        </div>
+
+                        <div className="sm:col-span-3">
+                          <label className="block text-[11px] text-slate-400 mb-1">Plan Notes</label>
+                          <input
+                            type="text"
+                            value={newNotes}
+                            onChange={(e) => setNewNotes(e.target.value)}
+                            placeholder="e.g. Standard Audio Only"
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+
+                        <div className="sm:col-span-2">
+                          <button
+                            type="submit"
+                            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5 shadow"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Generate Key</span>
+                          </button>
                         </div>
                       </div>
 
-                      <div className="sm:col-span-3">
-                        <label className="block text-[11px] text-slate-400 mb-1">Notes / Plan</label>
-                        <input
-                          type="text"
-                          value={newNotes}
-                          onChange={(e) => setNewNotes(e.target.value)}
-                          placeholder="e.g. Monthly Standard"
-                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
-                        />
-                      </div>
+                      {/* Feature Mode & API Key Assignments Row */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-slate-800/80">
+                        {/* Feature Mode Selector */}
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                            Call Mode Permissions:
+                          </label>
+                          <select
+                            value={newFeatureMode}
+                            onChange={(e) => setNewFeatureMode(e.target.value as LicenseFeatureMode)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                          >
+                            <option value="full">Full Suite (Video Transformation + Cloned Voice)</option>
+                            <option value="video_only">Video Only (Normal Mic Only, Voice Clone Locked)</option>
+                            <option value="voice_only">Voice Only (Cloned Voice Calls, Video Locked)</option>
+                          </select>
+                        </div>
 
-                      <div className="sm:col-span-2">
-                        <button
-                          type="submit"
-                          className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5 shadow"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Generate Key</span>
-                        </button>
+                        {/* Dedicated Video Key Assignment */}
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1">
+                            <Video className="w-3 h-3 text-purple-400" />
+                            <span>Assigned Video API Key:</span>
+                          </label>
+                          <select
+                            value={newAssignedVideoKeyId}
+                            onChange={(e) => setNewAssignedVideoKeyId(e.target.value)}
+                            disabled={newFeatureMode === 'voice_only'}
+                            className="w-full bg-slate-900 border border-slate-700 disabled:opacity-40 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                          >
+                            <option value="">Default (Master Video Engine Key)</option>
+                            {videoVaultKeys.map((k) => (
+                              <option key={k.id} value={k.id}>
+                                {k.name} ({k.provider || 'WebRTC Video'})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Dedicated Voice Key Assignment */}
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1">
+                            <Mic className="w-3 h-3 text-sky-400" />
+                            <span>Assigned Voice API Key:</span>
+                          </label>
+                          <select
+                            value={newAssignedVoiceKeyId}
+                            onChange={(e) => setNewAssignedVoiceKeyId(e.target.value)}
+                            disabled={newFeatureMode === 'video_only'}
+                            className="w-full bg-slate-900 border border-slate-700 disabled:opacity-40 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                          >
+                            <option value="">Default (Master Voice Engine Key)</option>
+                            {voiceVaultKeys.map((k) => (
+                              <option key={k.id} value={k.id}>
+                                {k.name} ({k.provider || 'Speech Engine'})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                     </form>
 
@@ -413,10 +577,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           <tr className="bg-slate-900/90 border-b border-slate-800 text-[11px] text-slate-400">
                             <th className="py-3 px-4">Product Key</th>
                             <th className="py-3 px-3">Customer</th>
+                            <th className="py-3 px-3">Allowed Mode</th>
+                            <th className="py-3 px-3">Assigned API Keys</th>
                             <th className="py-3 px-3">Bound PC (HWID)</th>
                             <th className="py-3 px-3">Status</th>
-                            <th className="py-3 px-3">Minutes (Used / Total)</th>
-                            <th className="py-3 px-3">Remaining</th>
+                            <th className="py-3 px-3">Minutes Left</th>
                             <th className="py-3 px-4 text-right">Actions</th>
                           </tr>
                         </thead>
@@ -424,6 +589,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           {filteredLicenses.map((lic) => {
                             const isBound = Boolean(lic.boundHardwareId);
                             const isCurrentCopied = copiedKey === lic.key;
+                            const videoKeyItem = LicenseService.getVaultKeyById(lic.assignedVideoKeyId);
+                            const voiceKeyItem = LicenseService.getVaultKeyById(lic.assignedVoiceKeyId);
+
                             return (
                               <tr key={lic.key} className="hover:bg-slate-900/50 transition-colors">
                                 {/* Key & Copy */}
@@ -447,17 +615,56 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                   {lic.notes && <div className="text-[10px] text-slate-500 truncate max-w-[120px]">{lic.notes}</div>}
                                 </td>
 
+                                {/* Allowed Mode */}
+                                <td className="py-3 px-3">
+                                  <span
+                                    className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                                      lic.featureMode === 'video_only'
+                                        ? 'bg-purple-950/80 text-purple-300 border-purple-800/60'
+                                        : lic.featureMode === 'voice_only'
+                                        ? 'bg-sky-950/80 text-sky-300 border-sky-800/60'
+                                        : 'bg-indigo-950/80 text-indigo-300 border-indigo-800/60'
+                                    }`}
+                                  >
+                                    {lic.featureMode === 'video_only'
+                                      ? 'VIDEO ONLY'
+                                      : lic.featureMode === 'voice_only'
+                                      ? 'VOICE ONLY'
+                                      : 'FULL (VDO+VOC)'}
+                                  </span>
+                                </td>
+
+                                {/* Assigned API Keys */}
+                                <td className="py-3 px-3 text-[10px] space-y-0.5 font-mono">
+                                  {lic.featureMode !== 'voice_only' && (
+                                    <div className="text-purple-300 flex items-center gap-1">
+                                      <Video className="w-3 h-3" />
+                                      <span className="truncate max-w-[110px]" title={videoKeyItem?.name || 'Master Video Key'}>
+                                        {videoKeyItem ? videoKeyItem.name : 'Master Default'}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {lic.featureMode !== 'video_only' && (
+                                    <div className="text-sky-300 flex items-center gap-1">
+                                      <Mic className="w-3 h-3" />
+                                      <span className="truncate max-w-[110px]" title={voiceKeyItem?.name || 'Master Voice Key'}>
+                                        {voiceKeyItem ? voiceKeyItem.name : 'Master Default'}
+                                      </span>
+                                    </div>
+                                  )}
+                                </td>
+
                                 {/* Bound PC */}
                                 <td className="py-3 px-3">
                                   {isBound ? (
                                     <div className="space-y-0.5">
                                       <div className="text-emerald-400 font-mono text-[10px] flex items-center gap-1">
                                         <Cpu className="w-3 h-3" />
-                                        <span className="truncate max-w-[130px]" title={lic.boundHardwareId!}>
+                                        <span className="truncate max-w-[120px]" title={lic.boundHardwareId!}>
                                           {lic.boundHardwareId}
                                         </span>
                                       </div>
-                                      <div className="text-[10px] text-slate-400 truncate max-w-[130px]">
+                                      <div className="text-[10px] text-slate-400 truncate max-w-[120px]">
                                         {lic.boundDeviceName || 'Registered PC'}
                                       </div>
                                     </div>
@@ -485,17 +692,6 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                   </span>
                                 </td>
 
-                                {/* Minutes Used / Total */}
-                                <td className="py-3 px-3 font-mono text-slate-300">
-                                  {lic.isUnlimited ? (
-                                    <span className="text-indigo-400 font-bold">VIP Unlimited</span>
-                                  ) : (
-                                    <span>
-                                      {lic.usedMinutes.toFixed(1)} / {lic.allocatedMinutes}m
-                                    </span>
-                                  )}
-                                </td>
-
                                 {/* Remaining Minutes */}
                                 <td className="py-3 px-3 font-mono font-bold">
                                   {lic.isUnlimited ? (
@@ -510,6 +706,17 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                 {/* Actions */}
                                 <td className="py-3 px-4 text-right">
                                   <div className="flex items-center justify-end gap-1.5">
+                                    {/* Assign Keys / Mode */}
+                                    <button
+                                      type="button"
+                                      onClick={() => openAssignModal(lic)}
+                                      className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[11px] font-medium transition-colors flex items-center gap-1"
+                                      title="Assign or change Video/Voice API keys and feature modes"
+                                    >
+                                      <Sliders className="w-3 h-3 text-indigo-400" />
+                                      <span>Assign</span>
+                                    </button>
+
                                     {/* Add Minutes */}
                                     {!lic.isUnlimited && (
                                       <button
@@ -530,7 +737,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                         className="px-2 py-1 bg-amber-600/20 hover:bg-amber-600/40 text-amber-300 rounded text-[11px] font-medium transition-colors"
                                         title="Unbind this PC so the user can transfer to another computer"
                                       >
-                                        Unbind PC
+                                        Unbind
                                       </button>
                                     )}
 
@@ -569,7 +776,238 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 </div>
               )}
 
-              {/* TAB 2: TIMER & MINUTE CONSUMPTION ENGINE */}
+              {/* TAB 2: API KEY VAULT & POOLS (ENTER MORE VIDEO & VOICE API KEYS) */}
+              {activeTab === 'vault' && (
+                <div className="space-y-6">
+                  {/* Top Intro */}
+                  <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <Database className="w-4 h-4 text-indigo-400" />
+                        <span>API Key Vault & Dedicated Pools</span>
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Add and manage multiple Video API Keys and Voice API Keys. Assign distinct keys to clients to segment usage and enforce video-only or voice-only plans.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs font-mono">
+                      <span className="px-2.5 py-1 rounded-lg bg-purple-950 text-purple-300 border border-purple-800/60 font-semibold">
+                        {videoVaultKeys.length} Video Keys
+                      </span>
+                      <span className="px-2.5 py-1 rounded-lg bg-sky-950 text-sky-300 border border-sky-800/60 font-semibold">
+                        {voiceVaultKeys.length} Voice Keys
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Add New Vault Key Form */}
+                  <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-sm">
+                    <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                      <Plus className="w-4 h-4 text-emerald-400" />
+                      <span>Add New API Key to Vault</span>
+                    </h4>
+
+                    <form onSubmit={handleAddVaultKey} className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                      <div className="sm:col-span-3">
+                        <label className="block text-[11px] text-slate-400 mb-1">Key Type / Category</label>
+                        <select
+                          value={newVaultKeyType}
+                          onChange={(e) => setNewVaultKeyType(e.target.value as 'video' | 'voice')}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-semibold"
+                        >
+                          <option value="video">VIDEO API KEY (WebRTC/Realtime Camera)</option>
+                          <option value="voice">VOICE API KEY (ElevenLabs Speech Clone)</option>
+                        </select>
+                      </div>
+
+                      <div className="sm:col-span-3">
+                        <label className="block text-[11px] text-slate-400 mb-1">Key Label / Friendly Name</label>
+                        <input
+                          type="text"
+                          value={newVaultKeyName}
+                          onChange={(e) => setNewVaultKeyName(e.target.value)}
+                          placeholder="e.g. VIP Video Pool #1"
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-4">
+                        <label className="block text-[11px] text-slate-400 mb-1">API Key Secret Value</label>
+                        <input
+                          type="password"
+                          value={newVaultApiKey}
+                          onChange={(e) => setNewVaultApiKey(e.target.value)}
+                          placeholder="Enter secret key string..."
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <button
+                          type="submit"
+                          className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5 shadow"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Save to Vault</span>
+                        </button>
+                      </div>
+
+                      <div className="sm:col-span-6">
+                        <label className="block text-[11px] text-slate-400 mb-1">Provider (Optional)</label>
+                        <input
+                          type="text"
+                          value={newVaultProvider}
+                          onChange={(e) => setNewVaultProvider(e.target.value)}
+                          placeholder="e.g. ElevenLabs Tier 3, Runway WebRTC, Livepeer"
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-6">
+                        <label className="block text-[11px] text-slate-400 mb-1">Internal Notes (Optional)</label>
+                        <input
+                          type="text"
+                          value={newVaultNotes}
+                          onChange={(e) => setNewVaultNotes(e.target.value)}
+                          placeholder="e.g. Dedicated for high-paying corporate accounts"
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                    </form>
+                  </div>
+
+                  {/* Vault Keys Listing */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* VIDEO KEYS COLUMN */}
+                    <div className="bg-slate-950/70 border border-purple-900/40 rounded-2xl p-4 space-y-3">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                        <div className="flex items-center gap-2 text-purple-300 font-bold text-xs">
+                          <Video className="w-4 h-4" />
+                          <span>Video Engine API Keys ({videoVaultKeys.length})</span>
+                        </div>
+                        <span className="text-[10px] text-slate-500">For live camera transformation</span>
+                      </div>
+
+                      {videoVaultKeys.length === 0 ? (
+                        <div className="p-6 text-center text-xs text-slate-500 border border-dashed border-slate-800 rounded-xl">
+                          No dedicated Video API keys in vault yet. The default Master Video Key will be used.
+                        </div>
+                      ) : (
+                        <div className="space-y-2.5">
+                          {videoVaultKeys.map((k) => {
+                            const assignedCount = licenses.filter((l) => l.assignedVideoKeyId === k.id).length;
+                            return (
+                              <div
+                                key={k.id}
+                                className="bg-slate-900/80 border border-slate-800 hover:border-purple-800/60 p-3 rounded-xl space-y-1.5 transition-all"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="font-semibold text-xs text-white flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full bg-purple-400" />
+                                    <span>{k.name}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-950 text-purple-300 border border-purple-800/50 font-mono">
+                                      {assignedCount} license{assignedCount === 1 ? '' : 's'} assigned
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCopy(k.apiKey)}
+                                      className="text-slate-400 hover:text-white p-1 rounded transition-colors"
+                                      title="Copy Secret API Key"
+                                    >
+                                      {copiedKey === k.apiKey ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteVaultKey(k.id, k.name)}
+                                      className="text-slate-500 hover:text-rose-400 p-1 rounded transition-colors"
+                                      title="Delete key"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div className="text-[11px] font-mono text-slate-400 flex items-center justify-between">
+                                  <span>Key: &bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;{k.apiKey.slice(-6)}</span>
+                                  <span className="text-slate-500 text-[10px]">{k.provider}</span>
+                                </div>
+                                {k.notes && <div className="text-[10px] text-slate-500 truncate">{k.notes}</div>}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* VOICE KEYS COLUMN */}
+                    <div className="bg-slate-950/70 border border-sky-900/40 rounded-2xl p-4 space-y-3">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                        <div className="flex items-center gap-2 text-sky-300 font-bold text-xs">
+                          <Mic className="w-4 h-4" />
+                          <span>Voice Engine API Keys ({voiceVaultKeys.length})</span>
+                        </div>
+                        <span className="text-[10px] text-slate-500">For ElevenLabs speech cloning</span>
+                      </div>
+
+                      {voiceVaultKeys.length === 0 ? (
+                        <div className="p-6 text-center text-xs text-slate-500 border border-dashed border-slate-800 rounded-xl">
+                          No dedicated Voice API keys in vault yet. The default Master Voice Key will be used.
+                        </div>
+                      ) : (
+                        <div className="space-y-2.5">
+                          {voiceVaultKeys.map((k) => {
+                            const assignedCount = licenses.filter((l) => l.assignedVoiceKeyId === k.id).length;
+                            return (
+                              <div
+                                key={k.id}
+                                className="bg-slate-900/80 border border-slate-800 hover:border-sky-800/60 p-3 rounded-xl space-y-1.5 transition-all"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="font-semibold text-xs text-white flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full bg-sky-400" />
+                                    <span>{k.name}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-950 text-sky-300 border border-sky-800/50 font-mono">
+                                      {assignedCount} license{assignedCount === 1 ? '' : 's'} assigned
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCopy(k.apiKey)}
+                                      className="text-slate-400 hover:text-white p-1 rounded transition-colors"
+                                      title="Copy Secret API Key"
+                                    >
+                                      {copiedKey === k.apiKey ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteVaultKey(k.id, k.name)}
+                                      className="text-slate-500 hover:text-rose-400 p-1 rounded transition-colors"
+                                      title="Delete key"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div className="text-[11px] font-mono text-slate-400 flex items-center justify-between">
+                                  <span>Key: &bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;{k.apiKey.slice(-6)}</span>
+                                  <span className="text-slate-500 text-[10px]">{k.provider}</span>
+                                </div>
+                                {k.notes && <div className="text-[10px] text-slate-500 truncate">{k.notes}</div>}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: TIMER & MINUTE CONSUMPTION ENGINE */}
               {activeTab === 'timer' && (
                 <div className="max-w-2xl mx-auto space-y-6">
                   <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-6 space-y-5">
@@ -696,17 +1134,17 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 </div>
               )}
 
-              {/* TAB 3: MASTER ENGINE VAULT */}
+              {/* TAB 4: MASTER ENGINE VAULT (FALLBACK DEFAULT KEYS) */}
               {activeTab === 'engine' && (
                 <div className="max-w-2xl mx-auto space-y-6">
                   <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-6 space-y-4">
                     <div className="flex items-center gap-2 text-indigo-400 font-bold text-sm">
                       <Zap className="w-5 h-5" />
-                      <span>Master Engine Key Vault (Zero-Configuration for Customers)</span>
+                      <span>Master Fallback Keys (Zero-Configuration for Customers)</span>
                     </div>
 
                     <p className="text-xs text-slate-400 leading-relaxed">
-                      By entering your Master API Keys here, your customers do <strong>NOT</strong> need to enter or see any keys. The software uses your master keys securely when an activated Product Key is verified.
+                      These are the global fallback keys. When a license does not have an individually assigned key from the Vault, the application automatically uses these master keys.
                     </p>
 
                     <div className="space-y-4 pt-2">
@@ -746,13 +1184,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       onClick={handleSaveAdminConfig}
                       className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 rounded-xl text-xs transition-colors shadow"
                     >
-                      Save Master Keys to Application Vault
+                      Save Master Keys
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* TAB 4: ADMIN PASSWORD */}
+              {/* TAB 5: ADMIN PASSWORD */}
               {activeTab === 'security' && (
                 <div className="max-w-md mx-auto space-y-6">
                   <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-6 space-y-4">
@@ -790,6 +1228,114 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* ASSIGN / EDIT PERMISSIONS MODAL DIALOG */}
+        {assigningLicense && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 animate-in fade-in">
+            <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-lg space-y-5 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-indigo-400" />
+                    <span>Assign API Keys & Mode Permissions</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Customer: <strong className="text-white">{assigningLicense.clientName}</strong> ({assigningLicense.key})
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAssigningLicense(null)}
+                  className="text-slate-400 hover:text-white"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Mode Selection */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-300">
+                  Feature Mode Permissions:
+                </label>
+                <select
+                  value={editFeatureMode}
+                  onChange={(e) => setEditFeatureMode(e.target.value as LicenseFeatureMode)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium"
+                >
+                  <option value="full">Full Suite (Both Video & Voice Clone Allowed)</option>
+                  <option value="video_only">Video Only (Normal Mic Only, Voice Clone Locked)</option>
+                  <option value="voice_only">Voice Only (Cloned Voice Calls, Video Locked)</option>
+                </select>
+                <p className="text-[11px] text-slate-500">
+                  {editFeatureMode === 'video_only' &&
+                    'Customer can only use live video with normal microphone; voice cloning is disabled in UI.'}
+                  {editFeatureMode === 'voice_only' &&
+                    'Customer can only use voice cloning for calls; video transformation engine is disabled.'}
+                  {editFeatureMode === 'full' && 'Customer can use both live video transformation and voice cloning.'}
+                </p>
+              </div>
+
+              {/* Video Key Selection */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                  <Video className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Assigned Video API Key:</span>
+                </label>
+                <select
+                  value={editAssignedVideoKeyId}
+                  onChange={(e) => setEditAssignedVideoKeyId(e.target.value)}
+                  disabled={editFeatureMode === 'voice_only'}
+                  className="w-full bg-slate-950 border border-slate-700 disabled:opacity-40 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="">Default (Master Video Engine Key)</option>
+                  {videoVaultKeys.map((k) => (
+                    <option key={k.id} value={k.id}>
+                      {k.name} ({k.provider || 'Video Engine'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Voice Key Selection */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                  <Mic className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Assigned Voice API Key:</span>
+                </label>
+                <select
+                  value={editAssignedVoiceKeyId}
+                  onChange={(e) => setEditAssignedVoiceKeyId(e.target.value)}
+                  disabled={editFeatureMode === 'video_only'}
+                  className="w-full bg-slate-950 border border-slate-700 disabled:opacity-40 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="">Default (Master Voice Engine Key)</option>
+                  {voiceVaultKeys.map((k) => (
+                    <option key={k.id} value={k.id}>
+                      {k.name} ({k.provider || 'Speech Engine'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setAssigningLicense(null)}
+                  className="flex-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveLicensePermissions}
+                  className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg text-xs shadow"
+                >
+                  Save Key Assignments
+                </button>
+              </div>
             </div>
           </div>
         )}

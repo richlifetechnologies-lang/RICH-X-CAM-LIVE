@@ -27,7 +27,7 @@ export class AudioCaptureService {
           return {
             deviceId: d.deviceId,
             label: d.label || `${d.kind === 'audioinput' ? 'Microphone' : 'Speaker'} (${d.deviceId.slice(0, 5)})`,
-            kind: d.kind,
+            kind: d.kind as 'audioinput' | 'audiooutput',
             isVirtual,
           };
         });

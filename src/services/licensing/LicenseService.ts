@@ -1,10 +1,18 @@
-import { LicenseKeyItem, TimerConsumptionConfig, AdminSecurityConfig, ActivationResult } from '../../types/licensing';
+import {
+  LicenseKeyItem,
+  TimerConsumptionConfig,
+  AdminSecurityConfig,
+  ActivationResult,
+  ApiKeyVaultItem,
+  LicenseFeatureMode,
+} from '../../types/licensing';
 
 const STORAGE_LICENSES = 'richx_cam_licenses_registry_v1';
 const STORAGE_CURRENT_LICENSE = 'richx_cam_active_client_license_v1';
 const STORAGE_HWID = 'richx_cam_machine_hwid_v1';
 const STORAGE_TIMER_CONFIG = 'richx_cam_timer_config_v1';
 const STORAGE_ADMIN_CONFIG = 'richx_cam_admin_config_v1';
+const STORAGE_VAULT_KEYS = 'richx_cam_api_key_vault_v1';
 
 const DEFAULT_TIMER_CONFIG: TimerConsumptionConfig = {
   videoOnlyRateMultiplier: 1.0,
@@ -14,14 +22,14 @@ const DEFAULT_TIMER_CONFIG: TimerConsumptionConfig = {
 };
 
 const DEFAULT_ADMIN_CONFIG: AdminSecurityConfig = {
-  masterAdminPassword: 'admin', // Default initial master admin password
+  masterAdminPassword: 'admin',
   masterVideoEngineKey: '',
   masterVoiceEngineKey: '',
 };
 
 const INITIAL_STARTER_KEY: LicenseKeyItem = {
   key: 'RICHX-DEMO-60MIN-LIVE',
-  clientName: 'Demo Starter License',
+  clientName: 'Demo Starter License (Full Access)',
   allocatedMinutes: 60,
   usedMinutes: 0,
   remainingMinutes: 60,
@@ -32,7 +40,10 @@ const INITIAL_STARTER_KEY: LicenseKeyItem = {
   firstActivatedAt: null,
   lastActiveAt: null,
   createdAt: Date.now(),
-  notes: 'Pre-seeded starter key for testing installation',
+  notes: 'Pre-seeded starter key with both Video & Voice active',
+  featureMode: 'full',
+  assignedVideoKeyId: null,
+  assignedVoiceKeyId: null,
 };
 
 export class LicenseService {
@@ -71,6 +82,85 @@ export class LicenseService {
     return `${os} (${hwidShort})`;
   }
 
+  // --- API KEY VAULT (POOLS OF VIDEO & VOICE KEYS) ---
+  public static getAllVaultKeys(): ApiKeyVaultItem[] {
+    try {
+      const data = localStorage.getItem(STORAGE_VAULT_KEYS);
+      if (!data) return [];
+      return JSON.parse(data);
+    } catch {
+      return [];
+    }
+  }
+
+  public static saveAllVaultKeys(keys: ApiKeyVaultItem[]): void {
+    localStorage.setItem(STORAGE_VAULT_KEYS, JSON.stringify(keys));
+  }
+
+  public static getVaultKeysByType(type: 'video' | 'voice'): ApiKeyVaultItem[] {
+    return this.getAllVaultKeys().filter((k) => k.type === type);
+  }
+
+  public static getVaultKeyById(id: string | null | undefined): ApiKeyVaultItem | null {
+    if (!id) return null;
+    const all = this.getAllVaultKeys();
+    return all.find((k) => k.id === id) || null;
+  }
+
+  public static addVaultKey(
+    name: string,
+    type: 'video' | 'voice',
+    apiKey: string,
+    provider = '',
+    notes = ''
+  ): ApiKeyVaultItem {
+    const id = `KEY-${type.toUpperCase()}-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+    const newItem: ApiKeyVaultItem = {
+      id,
+      name: name.trim() || `${type === 'video' ? 'Video' : 'Voice'} Key #${this.getAllVaultKeys().length + 1}`,
+      type,
+      apiKey: apiKey.trim(),
+      provider: provider.trim() || (type === 'video' ? 'WebRTC Realtime Video Engine' : 'ElevenLabs Speech-to-Speech'),
+      notes: notes.trim(),
+      createdAt: Date.now(),
+    };
+
+    const all = this.getAllVaultKeys();
+    this.saveAllVaultKeys([newItem, ...all]);
+    return newItem;
+  }
+
+  public static updateVaultKey(id: string, updates: Partial<ApiKeyVaultItem>): void {
+    const all = this.getAllVaultKeys();
+    const idx = all.findIndex((k) => k.id === id);
+    if (idx !== -1) {
+      all[idx] = { ...all[idx], ...updates };
+      this.saveAllVaultKeys(all);
+    }
+  }
+
+  public static deleteVaultKey(id: string): void {
+    const all = this.getAllVaultKeys().filter((k) => k.id !== id);
+    this.saveAllVaultKeys(all);
+
+    // Also unassign from any licenses pointing to this deleted key
+    const licenses = this.getAllLicenses();
+    let modified = false;
+    licenses.forEach((lic) => {
+      if (lic.assignedVideoKeyId === id) {
+        lic.assignedVideoKeyId = null;
+        modified = true;
+      }
+      if (lic.assignedVoiceKeyId === id) {
+        lic.assignedVoiceKeyId = null;
+        modified = true;
+      }
+    });
+    if (modified) {
+      this.saveAllLicenses(licenses);
+    }
+  }
+
   // --- LICENSES REGISTRY ---
   public static getAllLicenses(): LicenseKeyItem[] {
     try {
@@ -80,7 +170,14 @@ export class LicenseService {
         localStorage.setItem(STORAGE_LICENSES, JSON.stringify(initial));
         return initial;
       }
-      return JSON.parse(data);
+      const parsed: LicenseKeyItem[] = JSON.parse(data);
+      // Ensure backwards compatibility with featureMode
+      return parsed.map((item) => ({
+        ...item,
+        featureMode: item.featureMode || 'full',
+        assignedVideoKeyId: item.assignedVideoKeyId ?? null,
+        assignedVoiceKeyId: item.assignedVoiceKeyId ?? null,
+      }));
     } catch {
       return [INITIAL_STARTER_KEY];
     }
@@ -94,15 +191,19 @@ export class LicenseService {
     clientName: string,
     minutes: number,
     isUnlimited = false,
-    notes = ''
+    notes = '',
+    featureMode: LicenseFeatureMode = 'full',
+    assignedVideoKeyId: string | null = null,
+    assignedVoiceKeyId: string | null = null
   ): LicenseKeyItem {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let p1 = '';
     let p2 = '';
     for (let i = 0; i < 4; i++) p1 += chars.charAt(Math.floor(Math.random() * chars.length));
     for (let i = 0; i < 4; i++) p2 += chars.charAt(Math.floor(Math.random() * chars.length));
-    
-    const key = `RICHX-${p1}-${p2}-LIVE`;
+
+    const prefix = featureMode === 'video_only' ? 'VDO' : featureMode === 'voice_only' ? 'VOC' : 'ALL';
+    const key = `RICHX-${prefix}-${p1}-${p2}`;
 
     const newLicense: LicenseKeyItem = {
       key,
@@ -118,12 +219,113 @@ export class LicenseService {
       lastActiveAt: null,
       createdAt: Date.now(),
       notes: notes.trim(),
+      featureMode,
+      assignedVideoKeyId: featureMode === 'voice_only' ? null : assignedVideoKeyId,
+      assignedVoiceKeyId: featureMode === 'video_only' ? null : assignedVoiceKeyId,
     };
 
     const all = this.getAllLicenses();
     const updated = [newLicense, ...all];
     this.saveAllLicenses(updated);
     return newLicense;
+  }
+
+  public static updateLicensePermissions(
+    key: string,
+    featureMode: LicenseFeatureMode,
+    assignedVideoKeyId: string | null,
+    assignedVoiceKeyId: string | null
+  ): void {
+    const all = this.getAllLicenses();
+    const license = all.find((l) => l.key === key);
+    if (license) {
+      license.featureMode = featureMode;
+      license.assignedVideoKeyId = featureMode === 'voice_only' ? null : assignedVideoKeyId;
+      license.assignedVoiceKeyId = featureMode === 'video_only' ? null : assignedVoiceKeyId;
+      this.saveAllLicenses(all);
+
+      const current = this.getActiveClientLicense();
+      if (current && current.key === key) {
+        localStorage.setItem(STORAGE_CURRENT_LICENSE, JSON.stringify(license));
+      }
+    }
+  }
+
+  // --- RESOLVE EFFECTIVE API KEYS & PERMISSIONS FOR CLIENT CALLS ---
+  public static getEffectiveKeysForLicense(license: LicenseKeyItem | null): {
+    videoKey: string;
+    voiceKey: string;
+    featureMode: LicenseFeatureMode;
+    isVideoAllowed: boolean;
+    isVoiceAllowed: boolean;
+    videoKeyLabel: string;
+    voiceKeyLabel: string;
+  } {
+    const adminConfig = this.getAdminConfig();
+    if (!license) {
+      return {
+        videoKey: adminConfig.masterVideoEngineKey || '',
+        voiceKey: adminConfig.masterVoiceEngineKey || '',
+        featureMode: 'full',
+        isVideoAllowed: true,
+        isVoiceAllowed: true,
+        videoKeyLabel: 'Master Default',
+        voiceKeyLabel: 'Master Default',
+      };
+    }
+
+    const mode = license.featureMode || 'full';
+    let videoKey = '';
+    let videoKeyLabel = 'None';
+    let voiceKey = '';
+    let voiceKeyLabel = 'None';
+
+    const isVideoAllowed = mode === 'full' || mode === 'video_only';
+    const isVoiceAllowed = mode === 'full' || mode === 'voice_only';
+
+    // Resolve Video Key if allowed
+    if (isVideoAllowed) {
+      if (license.assignedVideoKeyId) {
+        const vaultItem = this.getVaultKeyById(license.assignedVideoKeyId);
+        if (vaultItem && vaultItem.apiKey) {
+          videoKey = vaultItem.apiKey;
+          videoKeyLabel = vaultItem.name;
+        } else {
+          videoKey = adminConfig.masterVideoEngineKey || '';
+          videoKeyLabel = 'Master Default';
+        }
+      } else {
+        videoKey = adminConfig.masterVideoEngineKey || '';
+        videoKeyLabel = 'Master Default';
+      }
+    }
+
+    // Resolve Voice Key if allowed
+    if (isVoiceAllowed) {
+      if (license.assignedVoiceKeyId) {
+        const vaultItem = this.getVaultKeyById(license.assignedVoiceKeyId);
+        if (vaultItem && vaultItem.apiKey) {
+          voiceKey = vaultItem.apiKey;
+          voiceKeyLabel = vaultItem.name;
+        } else {
+          voiceKey = adminConfig.masterVoiceEngineKey || '';
+          voiceKeyLabel = 'Master Default';
+        }
+      } else {
+        voiceKey = adminConfig.masterVoiceEngineKey || '';
+        voiceKeyLabel = 'Master Default';
+      }
+    }
+
+    return {
+      videoKey,
+      voiceKey,
+      featureMode: mode,
+      isVideoAllowed,
+      isVoiceAllowed,
+      videoKeyLabel,
+      voiceKeyLabel,
+    };
   }
 
   // --- ACTIVATION & HARDWARE ID BINDING ---
@@ -176,9 +378,16 @@ export class LicenseService {
     this.saveAllLicenses(all);
     localStorage.setItem(STORAGE_CURRENT_LICENSE, JSON.stringify(license));
 
+    const modeDesc =
+      license.featureMode === 'video_only'
+        ? ' [Video Only License]'
+        : license.featureMode === 'voice_only'
+        ? ' [Voice Cloning Only License]'
+        : ' [Full Video & Voice Suite]';
+
     return {
       success: true,
-      message: `Product successfully activated for ${license.clientName}! ${
+      message: `Product successfully activated for ${license.clientName}!${modeDesc} ${
         license.isUnlimited ? 'Unlimited VIP Minutes' : `${license.remainingMinutes} Call Minutes remaining`
       }.`,
       license,
@@ -220,7 +429,6 @@ export class LicenseService {
       license.status = 'unactivated';
       this.saveAllLicenses(all);
 
-      // If active on this machine, clear it
       const current = this.getActiveClientLicense();
       if (current && current.key === key) {
         localStorage.removeItem(STORAGE_CURRENT_LICENSE);

@@ -1,4 +1,4 @@
-import { RichXCallConfig, ClonedVoiceItem } from '../types/cloudCall';
+import { RichXCallConfig, ClonedVoiceItem } from '../../types/cloudCall';
 
 const STORAGE_SETTINGS = 'richx_cam_live_config_v1';
 const STORAGE_VOICES = 'richx_cam_live_voices_v1';

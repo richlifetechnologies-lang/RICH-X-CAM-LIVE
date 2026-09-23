@@ -1,4 +1,4 @@
-import { EngineSettings, VoiceProfile } from '../types/voiceEngine';
+import { EngineSettings, VoiceProfile } from '../../types/voiceEngine';
 
 const STORAGE_KEY_PROFILES = 'livevoice_profiles_v1';
 const STORAGE_KEY_SETTINGS = 'livevoice_settings_v1';

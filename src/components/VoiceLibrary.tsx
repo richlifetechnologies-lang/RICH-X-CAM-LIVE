@@ -90,11 +90,17 @@ export const VoiceLibrary: React.FC<VoiceLibraryProps> = ({
       const rawAudio = await engine.testVoiceSample(profile.providerVoiceId);
 
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const pcm16 = new Int16Array(rawAudio);
-      const audioBuffer = ctx.createBuffer(1, pcm16.length, 24000);
-      const channel = audioBuffer.getChannelData(0);
-      for (let i = 0; i < pcm16.length; i++) {
-        channel[i] = pcm16[i] / 32768.0;
+      let audioBuffer: AudioBuffer;
+
+      if (rawAudio instanceof AudioBuffer) {
+        audioBuffer = rawAudio;
+      } else {
+        const pcm16 = new Int16Array(rawAudio);
+        audioBuffer = ctx.createBuffer(1, pcm16.length, 24000);
+        const channel = audioBuffer.getChannelData(0);
+        for (let i = 0; i < pcm16.length; i++) {
+          channel[i] = pcm16[i] / 32768.0;
+        }
       }
 
       const source = ctx.createBufferSource();

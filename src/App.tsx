@@ -24,6 +24,9 @@ import {
   Clock,
   AlertTriangle,
   Cpu,
+  Volume2,
+  Activity,
+  Headphones,
 } from 'lucide-react';
 import { RichXCallConfig, ClonedVoiceItem, VideoOrientation } from './types/cloudCall';
 import { CloudCallStore } from './services/storage/CloudCallStore';
@@ -47,6 +50,9 @@ export default function App() {
   const [isCallActive, setIsCallActive] = useState(false);
   const [callStatus, setCallStatus] = useState<string>('RICHX CAM Ready for live call');
   const [isTheaterMode, setIsTheaterMode] = useState(false);
+
+  // Call Type: 'video' (Full Video + Audio) vs 'audio_only' (Live Voice Engine / Microphone only)
+  const [callType, setCallType] = useState<'video' | 'audio_only'>('video');
 
   // Licensing & Admin State
   const [activeLicense, setActiveLicense] = useState<LicenseKeyItem | null>(LicenseService.getActiveClientLicense());
@@ -72,6 +78,22 @@ export default function App() {
   const audioRoutingRef = useRef<VirtualMicRoutingService>(new VirtualMicRoutingService());
   const voiceEngineRef = useRef<ElevenLabsEngine>(new ElevenLabsEngine());
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Calculate Effective Keys and Allowed Modes based on active license
+  const effectiveKeys = LicenseService.getEffectiveKeysForLicense(activeLicense);
+
+  // Automatically enforce restrictions if license is restricted
+  useEffect(() => {
+    if (activeLicense) {
+      if (activeLicense.featureMode === 'voice_only') {
+        setCallType('audio_only');
+      } else if (activeLicense.featureMode === 'video_only' && config.voiceMode === 'cloned_voice') {
+        const updated = { ...config, voiceMode: 'natural_mic' as const };
+        setConfig(updated);
+        CloudCallStore.saveConfig(updated);
+      }
+    }
+  }, [activeLicense]);
 
   // Keyboard shortcut (Ctrl+Shift+A) for hidden Admin Portal
   useEffect(() => {
@@ -158,32 +180,54 @@ export default function App() {
       return;
     }
 
+    // 2. Verify Feature Mode Restrictions
+    const keysInfo = LicenseService.getEffectiveKeysForLicense(license);
+
+    if (callType === 'video' && !keysInfo.isVideoAllowed) {
+      alert('Your Product Key is restricted to Voice Calls only. Video transformation is not permitted.');
+      setCallType('audio_only');
+      return;
+    }
+
+    if (config.voiceMode === 'cloned_voice' && !keysInfo.isVoiceAllowed) {
+      alert('Your Product Key is restricted to Video Only calls with your normal microphone. Cloned voice is locked.');
+      const updated = { ...config, voiceMode: 'natural_mic' as const };
+      setConfig(updated);
+      CloudCallStore.saveConfig(updated);
+      return;
+    }
+
     try {
+      const isAudioOnly = callType === 'audio_only' || !keysInfo.isVideoAllowed;
+
       setCallStatus(
-        `RICH X CAM LIVE: Initializing ${
-          config.videoOrientation === 'portrait' ? 'Portrait (Mobile Phone)' : 'Landscape (Desktop/Webcam)'
-        } video & audio sync...`
+        isAudioOnly
+          ? 'RICH X CAM LIVE: Initializing Audio-Only Live Call pipeline...'
+          : `RICH X CAM LIVE: Initializing ${
+              config.videoOrientation === 'portrait' ? 'Portrait (Mobile Phone)' : 'Landscape (Desktop/Webcam)'
+            } video & audio sync...`
       );
 
-      // Check Master Keys from Admin Vault if local configs are empty
-      const adminConfig = LicenseService.getAdminConfig();
-      const effectiveVideoKey = config.videoEngineApiKey || adminConfig.masterVideoEngineKey;
-      const effectiveVoiceKey = config.voiceEngineApiKey || adminConfig.masterVoiceEngineKey;
+      // Resolve API keys (prioritizing assigned key, then fallback)
+      const effectiveVideoKey = keysInfo.videoKey || config.videoEngineApiKey;
+      const effectiveVoiceKey = keysInfo.voiceKey || config.voiceEngineApiKey;
 
-      // 1. Start Video Stream in chosen orientation
-      await videoEngineRef.current.startWebRTCStream(
-        effectiveVideoKey,
-        config.selectedCameraId,
-        config.videoPrompt,
-        config.referenceImageUrl,
-        config.videoOrientation,
-        (stream) => {
-          if (videoDisplayRef.current) {
-            videoDisplayRef.current.srcObject = stream;
-          }
-        },
-        (status) => setCallStatus(status)
-      );
+      // 1. Start Video Stream only if NOT audio-only
+      if (!isAudioOnly) {
+        await videoEngineRef.current.startWebRTCStream(
+          effectiveVideoKey,
+          config.selectedCameraId,
+          config.videoPrompt,
+          config.referenceImageUrl,
+          config.videoOrientation,
+          (stream) => {
+            if (videoDisplayRef.current) {
+              videoDisplayRef.current.srcObject = stream;
+            }
+          },
+          (status) => setCallStatus(status)
+        );
+      }
 
       // 2. Initialize Virtual Routing with chosen output device
       await audioRoutingRef.current.init(
@@ -256,9 +300,11 @@ export default function App() {
       setDurationSec(0);
       setIsCallActive(true);
       setCallStatus(
-        `RICH X CAM LIVE Active (${config.videoOrientation === 'portrait' ? 'Portrait Phone' : 'Landscape PC'}) — ${
-          config.voiceMode === 'cloned_voice' ? 'Cloned Voice' : 'Natural Mic Synchronized'
-        }`
+        isAudioOnly
+          ? `RICH X Audio Live Active — ${config.voiceMode === 'cloned_voice' ? 'Cloned Voice' : 'Natural Mic'}`
+          : `RICH X CAM LIVE Active (${config.videoOrientation === 'portrait' ? 'Portrait Phone' : 'Landscape PC'}) — ${
+              config.voiceMode === 'cloned_voice' ? 'Cloned Voice' : 'Natural Mic Synchronized'
+            }`
       );
     } catch (err: any) {
       console.error('Call failed', err);
@@ -286,7 +332,7 @@ export default function App() {
     const updated = { ...config, videoOrientation: orientation };
     setConfig(updated);
     CloudCallStore.saveConfig(updated);
-    if (isCallActive) {
+    if (isCallActive && callType === 'video') {
       handleStartCall();
     }
   };
@@ -342,6 +388,9 @@ export default function App() {
     !activeLicense.isUnlimited &&
     activeLicense.remainingMinutes <= timerConfig.warningThresholdMinutes;
 
+  const isVideoLocked = !effectiveKeys.isVideoAllowed;
+  const isVoiceCloneLocked = !effectiveKeys.isVoiceAllowed;
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
       {/* Top Header */}
@@ -377,14 +426,29 @@ export default function App() {
               }`}
             >
               <Clock className={`w-3.5 h-3.5 ${isLowMinutes ? 'text-amber-400' : 'text-indigo-400'}`} />
-              <div className="flex items-center gap-1.5">
-                <span className="font-semibold text-white">{activeLicense.clientName}:</span>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-white truncate max-w-[130px]">{activeLicense.clientName}:</span>
                 <span className="font-bold">
                   {activeLicense.isUnlimited ? (
                     <span className="text-indigo-400">VIP ∞</span>
                   ) : (
                     <span>{activeLicense.remainingMinutes.toFixed(1)} mins</span>
                   )}
+                </span>
+                <span
+                  className={`text-[9px] px-1.5 py-0.2 rounded font-semibold uppercase ${
+                    activeLicense.featureMode === 'video_only'
+                      ? 'bg-purple-900/80 text-purple-300'
+                      : activeLicense.featureMode === 'voice_only'
+                      ? 'bg-sky-900/80 text-sky-300'
+                      : 'bg-indigo-900/80 text-indigo-300'
+                  }`}
+                >
+                  {activeLicense.featureMode === 'video_only'
+                    ? 'Video Only'
+                    : activeLicense.featureMode === 'voice_only'
+                    ? 'Voice Only'
+                    : 'Full'}
                 </span>
               </div>
             </div>
@@ -407,7 +471,7 @@ export default function App() {
             <span className="hidden sm:inline">Calling Apps Guide</span>
           </button>
 
-          {/* Owner & Admin Portal Discreet Button */}
+          {/* Owner & Admin Portal Button */}
           <button
             onClick={() => setIsAdminOpen(true)}
             className="px-3 py-1.5 rounded-lg bg-indigo-950/70 hover:bg-indigo-900/80 text-indigo-300 text-xs flex items-center gap-1.5 transition-colors border border-indigo-700/60 shadow-xs"
@@ -421,46 +485,81 @@ export default function App() {
 
       {/* Main Grid: Video Stage (Left) & Controls (Right) */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Video Viewport & Controls (7 Cols) */}
+        {/* Left Column: Stage Viewport & Controls (7 Cols) */}
         <div className="lg:col-span-7 space-y-4">
-          {/* Orientation Mode Switcher Buttons (Portrait Phone vs Landscape Computer) */}
-          <div className="flex items-center justify-between bg-slate-900/80 border border-slate-800 rounded-xl p-2.5">
-            <div className="text-xs font-semibold text-slate-300 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-indigo-500" />
-              <span>Camera Output Mode:</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {/* Landscape Button (Computer / Webcam) */}
+          {/* Top Bar: Call Type Selector (Video + Audio vs Audio-Only) */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-900/80 border border-slate-800 rounded-xl p-2.5">
+            {/* Primary Call Type Selector */}
+            <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+              {/* Option 1: Video + Audio Call */}
               <button
                 type="button"
-                onClick={() => handleOrientationChange('landscape')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
-                  !isPortrait
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                    : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800'
+                disabled={isVideoLocked || isCallActive}
+                onClick={() => setCallType('video')}
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  callType === 'video'
+                    ? 'bg-indigo-600 text-white shadow'
+                    : 'text-slate-400 hover:text-slate-200 disabled:opacity-40 disabled:hover:text-slate-400'
                 }`}
+                title={isVideoLocked ? 'Video transformation locked on this license' : 'Full Video Camera + Audio Call'}
               >
-                <Monitor className="w-3.5 h-3.5" />
-                <span>Landscape (16:9 PC/Desktop)</span>
+                <Video className="w-3.5 h-3.5" />
+                <span>Video + Audio Call</span>
+                {isVideoLocked && <Lock className="w-2.5 h-2.5 text-rose-400" />}
               </button>
 
-              {/* Portrait Button (Mobile Phone) */}
+              {/* Option 2: Audio-Only Call (Voice Engine / Mic) */}
               <button
                 type="button"
-                onClick={() => handleOrientationChange('portrait')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
-                  isPortrait
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                    : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800'
+                disabled={isCallActive}
+                onClick={() => setCallType('audio_only')}
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  callType === 'audio_only'
+                    ? 'bg-sky-600 text-white shadow'
+                    : 'text-slate-400 hover:text-slate-200'
                 }`}
+                title="Audio-Only Call (Saves GPU/Battery, routes cloned voice or mic to calling apps)"
               >
-                <Smartphone className="w-3.5 h-3.5" />
-                <span>Portrait (9:16 Phone Mode)</span>
+                <Headphones className="w-3.5 h-3.5" />
+                <span>Audio-Only Call</span>
               </button>
             </div>
+
+            {/* Orientation Mode Switcher (Visible only in Video Mode) */}
+            {callType === 'video' && !isVideoLocked && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleOrientationChange('landscape')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1 transition-all ${
+                    !isPortrait
+                      ? 'bg-slate-800 text-indigo-300 border border-indigo-700/60'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="16:9 PC / Webcam Widescreen"
+                >
+                  <Monitor className="w-3 h-3" />
+                  <span>16:9 PC</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleOrientationChange('portrait')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1 transition-all ${
+                    isPortrait
+                      ? 'bg-slate-800 text-indigo-300 border border-indigo-700/60'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="9:16 Mobile Phone Portrait"
+                >
+                  <Smartphone className="w-3 h-3" />
+                  <span>9:16 Phone</span>
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Video Display Window Container */}
+          {/* Viewport Stage: Video Window or Audio Waveform Stage */}
           <div
             className={`flex justify-center transition-all duration-300 ${
               isTheaterMode
@@ -471,75 +570,152 @@ export default function App() {
             <div
               className={`relative bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center transition-all duration-300 ${
                 isTheaterMode
-                  ? isPortrait
+                  ? isPortrait && callType === 'video'
                     ? 'h-[90vh] aspect-[9/16]'
                     : 'w-full max-w-5xl aspect-video'
-                  : isPortrait
+                  : isPortrait && callType === 'video'
                   ? 'w-full max-w-sm aspect-[9/16]'
                   : 'w-full aspect-video'
               }`}
             >
-              <video
-                ref={videoDisplayRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover"
-              />
+              {/* VIDEO MODE */}
+              {callType === 'video' ? (
+                <>
+                  <video
+                    ref={videoDisplayRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                  />
 
-              {/* Top Viewport Action Controls (PiP & Theater Mode) */}
-              <div className="absolute top-3 right-3 flex items-center gap-1.5 z-20">
-                <button
-                  type="button"
-                  onClick={handlePictureInPicture}
-                  className="p-1.5 rounded-lg bg-black/60 hover:bg-black/80 text-white/80 hover:text-white border border-white/10 backdrop-blur-md transition-colors"
-                  title="Picture in Picture (Floating desktop widget)"
-                >
-                  <PictureInPicture className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsTheaterMode(!isTheaterMode)}
-                  className="p-1.5 rounded-lg bg-black/60 hover:bg-black/80 text-white/80 hover:text-white border border-white/10 backdrop-blur-md transition-colors"
-                  title={isTheaterMode ? 'Exit Clean Screen' : 'Clean Theater Screen (For Screen Sharing)'}
-                >
-                  {isTheaterMode ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-                </button>
-              </div>
-
-              {/* Idle Placeholder */}
-              {!isCallActive && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/85 backdrop-blur-xs p-6 text-center space-y-3">
-                  <div className="w-14 h-14 rounded-2xl bg-indigo-950/70 border border-indigo-700/60 flex items-center justify-center text-indigo-400">
-                    {isPortrait ? <Smartphone className="w-7 h-7" /> : <Video className="w-7 h-7" />}
+                  {/* Top Viewport Action Controls (PiP & Theater Mode) */}
+                  <div className="absolute top-3 right-3 flex items-center gap-1.5 z-20">
+                    <button
+                      type="button"
+                      onClick={handlePictureInPicture}
+                      className="p-1.5 rounded-lg bg-black/60 hover:bg-black/80 text-white/80 hover:text-white border border-white/10 backdrop-blur-md transition-colors"
+                      title="Picture in Picture"
+                    >
+                      <PictureInPicture className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsTheaterMode(!isTheaterMode)}
+                      className="p-1.5 rounded-lg bg-black/60 hover:bg-black/80 text-white/80 hover:text-white border border-white/10 backdrop-blur-md transition-colors"
+                      title={isTheaterMode ? 'Exit Clean Screen' : 'Clean Theater Screen'}
+                    >
+                      {isTheaterMode ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                    </button>
                   </div>
-                  <div className="space-y-1">
-                    <h3 className="text-base font-semibold text-white">
-                      RICH X CAM LIVE
-                    </h3>
-                    <p className="text-xs text-slate-400 max-w-xs">
-                      {isPortrait
-                        ? 'Simulates vertical mobile phone streaming on RICHX CAM.'
-                        : 'Simulates widescreen desktop webcam streaming on RICHX CAM.'}
+
+                  {/* Video Idle Placeholder */}
+                  {!isCallActive && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/85 backdrop-blur-xs p-6 text-center space-y-3">
+                      <div className="w-14 h-14 rounded-2xl bg-indigo-950/70 border border-indigo-700/60 flex items-center justify-center text-indigo-400">
+                        {isPortrait ? <Smartphone className="w-7 h-7" /> : <Video className="w-7 h-7" />}
+                      </div>
+                      <div className="space-y-1">
+                        <h3 className="text-base font-semibold text-white">
+                          RICH X CAM LIVE
+                        </h3>
+                        <p className="text-xs text-slate-400 max-w-xs">
+                          {isPortrait
+                            ? 'Simulates vertical mobile phone streaming on RICHX CAM.'
+                            : 'Simulates widescreen desktop webcam streaming on RICHX CAM.'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleStartCall}
+                        className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all hover:scale-105"
+                      >
+                        <PhoneCall className="w-4 h-4" />
+                        <span>Start RICH X Video Call</span>
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* AUDIO-ONLY CALL STAGE */
+                <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 to-slate-950 p-6 text-center space-y-5">
+                  <div className="relative">
+                    <div
+                      className={`w-20 h-20 rounded-3xl flex items-center justify-center transition-all ${
+                        isCallActive
+                          ? 'bg-sky-600/20 border-2 border-sky-400 shadow-xl shadow-sky-500/20 animate-pulse'
+                          : 'bg-slate-800/80 border border-slate-700 text-slate-400'
+                      }`}
+                    >
+                      <Headphones className={`w-10 h-10 ${isCallActive ? 'text-sky-400' : 'text-slate-400'}`} />
+                    </div>
+                    {isCallActive && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-slate-900 animate-ping" />
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5 max-w-sm">
+                    <div className="flex items-center justify-center gap-2">
+                      <h3 className="text-base font-bold text-white">
+                        {isCallActive ? 'Live Audio Call Active' : 'RICHX Audio-Only Studio'}
+                      </h3>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-sky-950 text-sky-300 border border-sky-800/60 font-semibold">
+                        AUDIO ONLY
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      {isCallActive
+                        ? `Live voice streaming to WhatsApp, Telegram, Zoom, Discord via RICHX MIC endpoint.`
+                        : `Make crystal-clear calls without camera usage. Choose cloned voice or your natural mic.`}
                     </p>
                   </div>
-                  <button
-                    onClick={handleStartCall}
-                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all hover:scale-105"
-                  >
-                    <PhoneCall className="w-4 h-4" />
-                    <span>Start RICH X Live Call</span>
-                  </button>
+
+                  {/* Animated Waveform Visualizer */}
+                  {isCallActive && (
+                    <div className="flex items-center justify-center gap-1.5 h-12 w-full max-w-xs">
+                      {[40, 70, 30, 90, 60, 100, 50, 80, 45, 95, 65, 35].map((baseHeight, idx) => {
+                        const dynamicMultiplier = Math.max(0.15, (audioInLevel + audioOutLevel) / 100);
+                        const calculatedHeight = Math.min(100, Math.max(12, baseHeight * dynamicMultiplier));
+                        return (
+                          <div
+                            key={idx}
+                            className="w-1.5 bg-gradient-to-t from-sky-500 to-indigo-400 rounded-full transition-all duration-75"
+                            style={{ height: `${calculatedHeight}%` }}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Audio Call Start / End Button */}
+                  <div>
+                    {!isCallActive ? (
+                      <button
+                        onClick={handleStartCall}
+                        className="px-6 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-semibold flex items-center gap-2 shadow-lg shadow-sky-600/30 transition-all hover:scale-105"
+                      >
+                        <PhoneCall className="w-4 h-4" />
+                        <span>Start Live Audio Call</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleEndCall}
+                        className="px-6 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-semibold flex items-center gap-2 shadow-md transition-all"
+                      >
+                        <PhoneOff className="w-4 h-4" />
+                        <span>End Live Audio Call</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 
-              {/* In-Call Telemetry Overlay */}
+              {/* In-Call Telemetry Overlay (Timer & Left Minutes) */}
               {isCallActive && (
                 <>
                   <div className="absolute top-3 left-3 flex items-center gap-2 pointer-events-none z-10">
                     <div className="flex items-center gap-1.5 bg-black/70 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/10 text-[11px] font-mono text-emerald-400 font-semibold">
                       <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                      <span>{isPortrait ? 'RICHX 9:16 PHONE' : 'RICHX 16:9 720P'}</span>
+                      <span>{callType === 'audio_only' ? 'RICHX LIVE AUDIO' : isPortrait ? 'RICHX 9:16 PHONE' : 'RICHX 16:9 PC'}</span>
                     </div>
                     <div className="bg-black/70 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/10 text-[11px] font-mono text-white">
                       {formatTimer(durationSec)}
@@ -602,11 +778,12 @@ export default function App() {
 
           {/* Device Selection Bar (Positioned Below Video Window) */}
           <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 shadow-sm">
-            {/* Select Camera Dropdown */}
+            {/* Select Camera Dropdown (Only relevant if callType === 'video') */}
             <div>
               <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
                 <Camera className="w-3.5 h-3.5 text-emerald-400" />
-                Select Camera (Physical Webcam)
+                <span>Select Physical Webcam</span>
+                {callType === 'audio_only' && <span className="text-[10px] text-slate-500">(Disabled in Audio Mode)</span>}
               </label>
               <select
                 value={config.selectedCameraId}
@@ -615,8 +792,8 @@ export default function App() {
                   setConfig(updated);
                   CloudCallStore.saveConfig(updated);
                 }}
-                disabled={isCallActive}
-                className="w-full bg-slate-950 border border-slate-700 disabled:opacity-50 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                disabled={isCallActive || callType === 'audio_only'}
+                className="w-full bg-slate-950 border border-slate-700 disabled:opacity-40 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
               >
                 <option value="default">Default Physical Webcam</option>
                 {availableCameras.map((c) => (
@@ -653,30 +830,32 @@ export default function App() {
             </div>
           </div>
 
-          {/* Live Video Transformation Prompt */}
-          <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-white flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-purple-400" />
-                RICH X CAM Persona & Appearance Prompt
-              </span>
-              <span className="text-[11px] text-slate-400">Updates live in real time</span>
+          {/* Live Video Transformation Prompt (Visible when Video Mode is active) */}
+          {callType === 'video' && (
+            <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-white flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-purple-400" />
+                  RICH X CAM Persona & Appearance Prompt
+                </span>
+                <span className="text-[11px] text-slate-400">Updates live in real time</span>
+              </div>
+              <input
+                type="text"
+                value={config.videoPrompt}
+                onChange={(e) => handleUpdatePrompt(e.target.value)}
+                placeholder="e.g. Sharp cinematic lighting, photorealistic executive studio look..."
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+              />
             </div>
-            <input
-              type="text"
-              value={config.videoPrompt}
-              onChange={(e) => handleUpdatePrompt(e.target.value)}
-              placeholder="e.g. Sharp cinematic lighting, photorealistic executive studio look..."
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
-            />
-          </div>
+          )}
 
-          {/* Video-to-Audio Lip-Sync Alignment Control */}
+          {/* Audio Lip-Sync Delay Slider */}
           <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-2">
             <div className="flex items-center justify-between text-xs">
               <span className="font-semibold text-white flex items-center gap-1.5">
                 <Sliders className="w-4 h-4 text-sky-400" />
-                RICHX Lip-Sync Timing Delay
+                RICHX Audio Timing Buffer / Lip-Sync
               </span>
               <span className="font-mono text-slate-300 font-semibold">{config.audioLatencyCompensationMs} ms delay</span>
             </div>
@@ -695,7 +874,7 @@ export default function App() {
               className="w-full accent-sky-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
             />
             <p className="text-[11px] text-slate-400">
-              Matches mouth movements in RICHX CAM with what your listeners hear in WhatsApp, Telegram, Zoom, or Discord.
+              Matches mouth movements with what listeners hear in WhatsApp, Telegram, Zoom, or Discord.
             </p>
           </div>
         </div>
@@ -704,28 +883,42 @@ export default function App() {
         <div className="lg:col-span-5 space-y-4">
           {/* Audio Source Mode Switcher */}
           <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-3">
-            <label className="block text-xs font-semibold text-white">RICHX Audio Mode:</label>
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-semibold text-white">RICHX Audio Mode:</label>
+              {isVoiceCloneLocked && (
+                <span className="text-[10px] font-mono text-rose-400 bg-rose-950/60 px-2 py-0.5 rounded border border-rose-900/60">
+                  Voice Clone Locked (Video Only Key)
+                </span>
+              )}
+            </div>
+
             <div className="grid grid-cols-2 gap-2">
               {/* Option 1: Cloned Cloud Voice */}
               <button
                 type="button"
+                disabled={isVoiceCloneLocked}
                 onClick={() => {
                   const updated = { ...config, voiceMode: 'cloned_voice' as const };
                   setConfig(updated);
                   CloudCallStore.saveConfig(updated);
                 }}
                 className={`p-3 rounded-lg border text-left transition-all ${
-                  config.voiceMode === 'cloned_voice'
+                  isVoiceCloneLocked
+                    ? 'opacity-40 cursor-not-allowed bg-slate-950 border-slate-800'
+                    : config.voiceMode === 'cloned_voice'
                     ? 'bg-indigo-950/70 border-indigo-500 text-white shadow'
                     : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
                 }`}
               >
-                <div className="flex items-center gap-1.5 font-semibold text-xs text-white mb-0.5">
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Cloned Voice</span>
+                <div className="flex items-center justify-between font-semibold text-xs text-white mb-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Cloned Voice</span>
+                  </div>
+                  {isVoiceCloneLocked && <Lock className="w-3 h-3 text-rose-400" />}
                 </div>
                 <div className="text-[10px] text-slate-400 leading-tight">
-                  Uses uploaded voice profile transformed in real-time.
+                  {isVoiceCloneLocked ? 'Not available on Video-Only plans.' : 'Real-time AI voice transformation.'}
                 </div>
               </button>
 
@@ -745,21 +938,21 @@ export default function App() {
               >
                 <div className="flex items-center gap-1.5 font-semibold text-xs text-white mb-0.5">
                   <UserCheck className="w-3.5 h-3.5 text-sky-400" />
-                  <span>Natural Microphone</span>
+                  <span>Natural Mic</span>
                 </div>
                 <div className="text-[10px] text-slate-400 leading-tight">
-                  Uses your natural microphone with synchronized lip-sync delay.
+                  Uses physical microphone with synchronized delay buffer.
                 </div>
               </button>
             </div>
           </div>
 
           {/* Voice Upload & Cloning Section (Shown if Cloned Voice is active) */}
-          {config.voiceMode === 'cloned_voice' ? (
+          {config.voiceMode === 'cloned_voice' && !isVoiceCloneLocked ? (
             <VoiceCloningSection
               voices={voices}
               activeVoiceId={config.activeVoiceId}
-              voiceEngineApiKey={config.voiceEngineApiKey || LicenseService.getAdminConfig().masterVoiceEngineKey}
+              voiceEngineApiKey={effectiveKeys.voiceKey || config.voiceEngineApiKey}
               onSelectVoice={(id) => {
                 const updated = { ...config, activeVoiceId: id };
                 setConfig(updated);
@@ -775,7 +968,7 @@ export default function App() {
                 <span>Natural Microphone Mode Active</span>
               </div>
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                Your microphone audio is captured directly and passed through the RICHX lip-sync alignment buffer to synchronize with the RICHX CAM video feed.
+                Your microphone audio is captured directly and passed through the RICHX audio alignment buffer to synchronize with the RICHX CAM feed or live call.
               </p>
             </div>
           )}

@@ -1,5 +1,5 @@
-import React from 'react';
-import { Video, Mic, Monitor, CheckCircle, X, Layers, Globe, Smartphone, ShieldCheck } from 'lucide-react';
+import React, { useState } from 'react';
+import { Video, Mic, Monitor, CheckCircle, X, Layers, Globe, Smartphone, ShieldCheck, Download, Settings, Volume2, Sparkles, AlertCircle } from 'lucide-react';
 
 interface SetupGuideModalProps {
   isOpen: boolean;
@@ -7,7 +7,44 @@ interface SetupGuideModalProps {
 }
 
 export const SetupGuideModal: React.FC<SetupGuideModalProps> = ({ isOpen, onClose }) => {
+  const [driverStatus, setDriverStatus] = useState<string | null>(null);
+  const [isInstalling, setIsInstalling] = useState(false);
+
   if (!isOpen) return null;
+
+  const handleInstallDrivers = async () => {
+    setIsInstalling(true);
+    setDriverStatus('Registering RICHX CAM & RICHX MIC drivers with Windows...');
+    try {
+      if ((window as any).electronAPI?.installVirtualDrivers) {
+        const res = await (window as any).electronAPI.installVirtualDrivers();
+        if (res.success) {
+          setDriverStatus('SUCCESS: RICHX CAM and RICHX MIC are now registered in Windows! Restart WhatsApp to select them.');
+        } else {
+          setDriverStatus(`Notice: ${res.message}. Run drivers\\install-richx-virtual-devices.bat as Administrator.`);
+        }
+      } else {
+        // In browser mode, trigger download or instruction
+        setDriverStatus('Running in Web Browser mode: In your installed Windows app, click this button or run install-richx-virtual-devices.bat as Administrator.');
+      }
+    } catch (err: any) {
+      setDriverStatus(`Error: ${err.message || err}`);
+    } finally {
+      setIsInstalling(false);
+    }
+  };
+
+  const handleOpenSoundSettings = async () => {
+    if ((window as any).electronAPI?.openSoundSettings) {
+      await (window as any).electronAPI.openSoundSettings();
+    }
+  };
+
+  const handleOpenCameraSettings = async () => {
+    if ((window as any).electronAPI?.openCameraSettings) {
+      await (window as any).electronAPI.openCameraSettings();
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-150">
@@ -35,6 +72,63 @@ export const SetupGuideModal: React.FC<SetupGuideModalProps> = ({ isOpen, onClos
 
         {/* Content */}
         <div className="p-6 space-y-5 overflow-y-auto">
+          {/* Driver Registration Quick Action (For WhatsApp & Zoom) */}
+          <div className="bg-gradient-to-r from-purple-950/80 to-indigo-950/80 border border-purple-500/40 rounded-xl p-4 space-y-3 shadow-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-purple-400" />
+                <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                  Windows Driver Registration (WhatsApp, Zoom, Discord)
+                </h4>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300">
+                DirectShow & WASAPI
+              </span>
+            </div>
+
+            <p className="text-[11px] text-slate-300 leading-relaxed">
+              If <strong>RICHX CAM</strong> or <strong>RICHX MIC</strong> does not appear in your WhatsApp camera/microphone dropdown list, click below to register the Windows DirectShow & CoreAudio device drivers with administrator rights:
+            </p>
+
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handleInstallDrivers}
+                disabled={isInstalling}
+                className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 active:scale-95 disabled:opacity-50 text-white font-semibold text-xs flex items-center gap-2 shadow-md transition-all cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>{isInstalling ? 'Registering Drivers...' : 'Register Drivers in Windows'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenSoundSettings}
+                className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs flex items-center gap-1.5 border border-slate-700 transition-colors cursor-pointer"
+                title="Open Windows Sound Control Panel"
+              >
+                <Volume2 className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Sound Settings</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenCameraSettings}
+                className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs flex items-center gap-1.5 border border-slate-700 transition-colors cursor-pointer"
+                title="Open Windows Camera Settings"
+              >
+                <Settings className="w-3.5 h-3.5 text-purple-400" />
+                <span>Camera Settings</span>
+              </button>
+            </div>
+
+            {driverStatus && (
+              <div className="p-2.5 rounded-lg bg-slate-900/90 border border-slate-700 text-[11px] text-indigo-300 flex items-start gap-2">
+                <AlertCircle className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
+                <span>{driverStatus}</span>
+              </div>
+            )}
+          </div>
           {/* Universal System-Level Guarantee Banner */}
           <div className="bg-indigo-950/40 border border-indigo-500/30 rounded-xl p-3.5 flex items-start gap-3">
             <Globe className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />

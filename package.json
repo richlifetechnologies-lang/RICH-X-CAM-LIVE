@@ -23,7 +23,14 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
+      "drivers/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "drivers",
+        "to": "drivers"
+      }
     ],
     "win": {
       "target": [
@@ -32,23 +39,23 @@
           "arch": [
             "x64"
           ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
         }
       ],
-      "artifactName": "${productName}-Setup-${version}.${ext}"
+      "icon": "build/icon.ico",
+      "artifactName": "RICH-X-CAM-LIVE-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
+      "allowElevation": true,
+      "createDesktopShortcut": "always",
       "createStartMenuShortcut": true,
-      "shortcutName": "RICH X CAM LIVE"
+      "shortcutName": "RICH X CAM LIVE",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "runAfterFinish": true
     }
   },
   "dependencies": {

@@ -111,7 +111,7 @@ export const AvatarReferenceUploader: React.FC<AvatarReferenceUploaderProps> = (
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const maxDim = 800; // Optimal resolution for real-time fal.ai LUCY 2.5 reference face
+        const maxDim = 800; // Optimal resolution for real-time reference face
         let { width, height } = img;
 
         if (width > height) {
@@ -219,7 +219,7 @@ export const AvatarReferenceUploader: React.FC<AvatarReferenceUploaderProps> = (
 
   return (
     <div className={`bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xl ${className}`}>
-      {/* Header with LUCY 2.5 Real-Time Engine Branding */}
+      {/* Header with RICH X Neural Video Engine Branding */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-purple-600/30">
@@ -228,14 +228,14 @@ export const AvatarReferenceUploader: React.FC<AvatarReferenceUploaderProps> = (
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-xs sm:text-sm font-bold text-white tracking-wide">
-                LUCY 2.5 Real-Time fal.ai Video Engine
+                RICH X Real-Time Video Engine
               </h3>
               <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-purple-950/80 text-purple-300 border border-purple-700/60 font-semibold uppercase tracking-wider">
-                Avatar Reference
+                Target Avatar
               </span>
             </div>
             <p className="text-[11px] text-slate-400">
-              Upload the target character face photo that LUCY 2.5 uses to transform your live camera feed in real time.
+              Upload the target persona face photo that RICH X CAM uses to transform your live camera feed in real time.
             </p>
           </div>
         </div>
@@ -243,12 +243,12 @@ export const AvatarReferenceUploader: React.FC<AvatarReferenceUploaderProps> = (
         {referenceImageUrl ? (
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-950/60 border border-emerald-700/50 text-[10px] font-medium text-emerald-300">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Reference Photo Active</span>
+            <span>Target Avatar Active</span>
           </div>
         ) : (
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-950/60 border border-amber-700/50 text-[10px] font-medium text-amber-300">
             <AlertCircle className="w-3 h-3" />
-            <span>Image Required by Engine</span>
+            <span>Avatar Photo Required</span>
           </div>
         )}
       </div>
@@ -262,13 +262,13 @@ export const AvatarReferenceUploader: React.FC<AvatarReferenceUploaderProps> = (
               <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-xl overflow-hidden border-2 border-indigo-500/60 shadow-xl group-hover:border-purple-400 transition-all bg-slate-900">
                 <img
                   src={referenceImageUrl}
-                  alt="Active LUCY 2.5 Avatar Reference"
+                  alt="Active RICH X Avatar Reference"
                   className="w-full h-full object-cover"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end justify-center p-1.5">
                   <span className="text-[9px] font-mono text-emerald-300 font-semibold flex items-center gap-1">
                     <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                    LUCY 2.5 Ready
+                    RICH X Ready
                   </span>
                 </div>
               </div>
@@ -416,7 +416,7 @@ export const AvatarReferenceUploader: React.FC<AvatarReferenceUploaderProps> = (
                 {isProcessing ? 'Processing & optimizing image...' : 'Click to upload or drag & drop'}
               </p>
               <p className="text-[10px] text-slate-400 mt-1">
-                PNG, JPG, WEBP &bull; Auto-optimized for LUCY 2.5 real-time 30FPS streaming
+                PNG, JPG, WEBP &bull; Auto-optimized for real-time 30FPS streaming
               </p>
             </div>
           )}
@@ -521,7 +521,7 @@ export const AvatarReferenceUploader: React.FC<AvatarReferenceUploaderProps> = (
                   type="url"
                   value={urlInput}
                   onChange={(e) => setUrlInput(e.target.value)}
-                  placeholder="https://example.com/avatar-portrait.jpg (or fal.media URL)"
+                  placeholder="https://example.com/avatar-portrait.jpg (or Cloud Storage URL)"
                   className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
                 />
                 <button
@@ -533,7 +533,7 @@ export const AvatarReferenceUploader: React.FC<AvatarReferenceUploaderProps> = (
                 </button>
               </div>
               <p className="text-[10px] text-slate-400">
-                Paste any direct image URL (PNG, JPG, WebP) from fal.ai, Imgur, Cloudinary, AWS S3, or public CDN.
+                Paste any direct image URL (PNG, JPG, WebP) from your cloud storage or CDN.
               </p>
             </form>
           )}
@@ -542,7 +542,7 @@ export const AvatarReferenceUploader: React.FC<AvatarReferenceUploaderProps> = (
           <div className="bg-purple-950/30 border border-purple-800/30 rounded-lg px-3 py-2 flex items-start gap-2 text-[10px] text-slate-300">
             <Zap className="w-3.5 h-3.5 text-purple-400 shrink-0 mt-0.5" />
             <span>
-              <strong>LUCY 2.5 on fal.ai Requirement:</strong> The real-time video transformation model maps your head position, facial expressions, and mouth movements directly onto this reference image.
+              <strong>RICH X Real-Time AI Video Engine:</strong> The neural transformation model maps head position, facial expressions, and mouth movements directly onto this reference avatar in real time.
             </span>
           </div>
         </div>

@@ -136,12 +136,12 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const handleResetToVerifiedPricing = () => {
     if (
       confirm(
-        'Reset API pricing to the official verified baseline (fal.ai LUCY 2.5: $0.0400/sec, ElevenLabs STS: $0.0025/sec)?'
+        'Reset API pricing to the official verified baseline (Video Engine: $0.0400/sec, Voice Engine: $0.0025/sec)?'
       )
     ) {
       const reset = BillingRateEngine.resetToVerifiedDefaults();
       setProviderCosts(reset);
-      setSaveSuccessMsg('Restored official verified rates for fal.ai and ElevenLabs!');
+      setSaveSuccessMsg('Restored official verified rates for video and voice engines!');
       setTimeout(() => setSaveSuccessMsg(null), 3000);
       refreshAll();
     }
@@ -668,7 +668,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                   </span>
                                 </div>
                                 <p className="text-[11px] text-slate-400 mt-0.5">
-                                  fal.ai LUCY 2.5 ($2.40/min) &bull; ElevenLabs Voice ($0.15/min) &bull; WebRTC Relay ($0.006/min)
+                                  Video Engine ($2.40/min) &bull; Voice Engine ($0.15/min) &bull; WebRTC Relay ($0.006/min)
                                 </p>
                               </div>
                             </div>
@@ -1279,7 +1279,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       </span>
                     </div>
                     <p className="text-xs text-slate-300 leading-relaxed">
-                      This system anchors your platform's billing, wallet consumption, and minute run-down directly to the verified official API costs of <strong>LUCY 2.5 on fal.ai</strong> and <strong>ElevenLabs Speech-to-Speech (STS)</strong>. Every call automatically calculates actual API consumption and enforces your target profit margin so you <strong>never lose money</strong>.
+                      This system anchors your platform's billing, wallet consumption, and minute run-down directly to the verified base costs of the <strong>RICH X Video Engine</strong> and <strong>Neural Voice Conversion</strong>. Every call automatically calculates actual API consumption and enforces your target profit margin so you <strong>never lose money</strong>.
                     </p>
                   </div>
 
@@ -1301,12 +1301,12 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* fal.ai LUCY 2.5 Video Cost */}
+                      {/* RICH X Video Cost */}
                       <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-2">
                         <div className="flex items-center justify-between">
                           <label className="text-xs font-semibold text-white flex items-center gap-1.5">
                             <Video className="w-4 h-4 text-purple-400" />
-                            <span>LUCY 2.5 on fal.ai Video Cost</span>
+                            <span>RICH X Video Engine Cost</span>
                           </label>
                           <span className="text-[10px] text-purple-300 font-mono font-semibold">
                             ${(providerCosts.lucy25VideoPerSecCost * 60).toFixed(2)}/min
@@ -1331,7 +1331,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           <span className="absolute right-3 top-2 text-[10px] text-slate-400 font-mono">/ sec</span>
                         </div>
                         <p className="text-[10px] text-slate-500">
-                          Official fal.ai serverless pricing: <strong>$0.0400 per second</strong> ($2.40/minute).
+                          Base GPU cluster pricing: <strong>$0.0400 per second</strong> ($2.40/minute).
                         </p>
                       </div>
 
@@ -1556,19 +1556,19 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       return (
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                           <div className="bg-slate-900/90 border border-slate-800 p-3.5 rounded-xl">
-                            <span className="text-[10px] text-slate-400 block font-medium">LUCY 2.5 Video Cost</span>
+                            <span className="text-[10px] text-slate-400 block font-medium">Video Engine Cost</span>
                             <span className="text-base font-bold font-mono text-purple-300">
                               ${simFinancials.rawLucyVideoCostUsd.toFixed(2)}
                             </span>
-                            <span className="text-[9px] text-slate-500 block">fal.ai serverless</span>
+                            <span className="text-[9px] text-slate-500 block">Cloud Video Cluster</span>
                           </div>
 
                           <div className="bg-slate-900/90 border border-slate-800 p-3.5 rounded-xl">
-                            <span className="text-[10px] text-slate-400 block font-medium">Voice API Cost</span>
+                            <span className="text-[10px] text-slate-400 block font-medium">Voice Engine Cost</span>
                             <span className="text-base font-bold font-mono text-sky-300">
                               ${(simFinancials.rawVoiceCloningCostUsd + simFinancials.rawNaturalAudioCostUsd).toFixed(2)}
                             </span>
-                            <span className="text-[9px] text-slate-500 block">{simulatedVoice === 'cloned' ? 'ElevenLabs STS' : 'WebRTC Relay'}</span>
+                            <span className="text-[9px] text-slate-500 block">{simulatedVoice === 'cloned' ? 'Neural Voice' : 'WebRTC Relay'}</span>
                           </div>
 
                           <div className="bg-slate-900/90 border border-slate-800 p-3.5 rounded-xl">
@@ -1609,7 +1609,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     </div>
 
                     <p className="text-xs text-slate-400 leading-relaxed">
-                      Configure how fast users consume minutes during live calls. Your underlying API costs (fal.ai LUCY 2.5 @ $2.40/min and ElevenLabs STS @ $0.15/min) automatically synchronize with these rules to project whether you are making profit or losing money.
+                      Configure how fast users consume minutes during live calls. Your underlying engine costs (Video Engine @ $2.40/min and Voice Engine @ $0.15/min) automatically synchronize with these rules to project whether you are making profit or losing money.
                     </p>
 
                     <div className="space-y-4 pt-2">
@@ -1676,7 +1676,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           <span>4.0x (Premium)</span>
                         </div>
                         <p className="text-[10px] text-slate-400 mt-1">
-                          When users enable real-time voice cloning, increasing this multiplier burns minutes faster so their real-world call duration is shorter, protecting you against excessive ElevenLabs and fal.ai API usage charges.
+                          When users enable real-time voice cloning, increasing this multiplier burns minutes faster so their real-world call duration is shorter, protecting you against excessive API usage charges.
                         </p>
                       </div>
 
@@ -1775,9 +1775,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           onChange={(e) => setTestRuleMode(e.target.value as LicenseFeatureMode)}
                           className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white"
                         >
-                          <option value="video_audio">Video Call + Audio Call (Lucy 2.5 + ElevenLabs)</option>
-                          <option value="audio_only">Audio Calls Only (ElevenLabs Voice Clone)</option>
-                          <option value="video_only">Video Calls Only (Lucy 2.5 + Natural Audio)</option>
+                          <option value="video_audio">Video Call + Audio Call (Video + Voice Conversion)</option>
+                          <option value="audio_only">Audio Calls Only (Voice Conversion Only)</option>
+                          <option value="video_only">Video Calls Only (Video + Natural Audio)</option>
                         </select>
                       </div>
 
@@ -1892,7 +1892,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                               <span className="font-mono font-bold text-purple-300">
                                 ${analysis.totalRawApiCostUsd.toFixed(2)}
                               </span>
-                              <span className="text-[9px] text-slate-500 block">fal.ai + ElevenLabs</span>
+                              <span className="text-[9px] text-slate-500 block">Cloud Video + Voice</span>
                             </div>
 
                             <div className="bg-slate-900/80 p-2.5 rounded-lg">

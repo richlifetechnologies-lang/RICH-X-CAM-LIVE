@@ -919,35 +919,7 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* Compact Lip-Sync HUD inside Viewport */}
-                  {isCallActive && (
-                    <div className="absolute top-3 left-3 flex items-center gap-2 z-20 pointer-events-none">
-                      <div className="flex items-center gap-1.5 bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/10 text-[11px] font-mono text-emerald-400 font-semibold">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                        <span>VIDEO + AUDIO</span>
-                      </div>
-                      <div className="bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/10 text-[11px] font-mono text-white">
-                        {formatTimer(durationSec)}
-                      </div>
-                      <LipSyncVisualizer
-                        metrics={lipSyncMetrics}
-                        isCallActive={isCallActive}
-                        callMode="video_audio"
-                        voiceMode={config.voiceMode}
-                        micName={currentMicName}
-                        clonedVoiceName={currentActiveVoice?.name}
-                        compact
-                      />
-                      {config.referenceImageUrl && (
-                        <div className="flex items-center gap-1.5 bg-black/75 backdrop-blur-md px-2 py-0.5 rounded-full border border-purple-500/40 text-[10px] font-mono text-purple-300">
-                          <img src={config.referenceImageUrl} alt="Target Avatar" className="w-3.5 h-3.5 rounded-full object-cover" />
-                          <span>LUCY 2.5</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Video Idle Placeholder */}
+                  {/* Video Idle Placeholder (Only when NOT active) */}
                   {!isCallActive && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/85 backdrop-blur-xs p-6 text-center space-y-3">
                       <div className="w-14 h-14 rounded-2xl bg-indigo-950/70 border border-indigo-700/60 flex items-center justify-center text-indigo-400">
@@ -965,12 +937,12 @@ export default function App() {
                       {config.referenceImageUrl ? (
                         <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-purple-950/60 border border-purple-700/50 text-[11px] text-purple-200">
                           <img src={config.referenceImageUrl} alt="Avatar" className="w-5 h-5 rounded-full object-cover border border-purple-400" />
-                          <span>Avatar Reference Ready for LUCY 2.5 fal.ai</span>
+                          <span>Target Avatar Ready</span>
                         </div>
                       ) : (
                         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-950/60 border border-amber-700/50 text-[11px] text-amber-200">
                           <Info className="w-4 h-4 text-amber-400 shrink-0" />
-                          <span>Upload reference photo below for LUCY 2.5 fal.ai</span>
+                          <span>Select or upload target persona avatar below</span>
                         </div>
                       )}
 
@@ -994,40 +966,6 @@ export default function App() {
                             <span>Plan Required (Assigned: {assignedModeDisplayName})</span>
                           </>
                         )}
-                      </button>
-                    </div>
-                  )}
-
-                  {/* In-Call Bottom Controls */}
-                  {isCallActive && (
-                    <div className="absolute bottom-3 inset-x-3 flex items-center justify-between bg-black/75 backdrop-blur-md p-2.5 rounded-xl border border-white/10 z-20">
-                      <div className="flex items-center gap-3 flex-1 max-w-[220px]">
-                        <div className="flex-1 space-y-0.5">
-                          <div className="flex justify-between text-[9px] text-slate-300 font-mono">
-                            <span>MIC LEVEL</span>
-                            <span>{audioInLevel}%</span>
-                          </div>
-                          <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
-                            <div className="h-full bg-indigo-400 transition-all duration-75" style={{ width: `${audioInLevel}%` }} />
-                          </div>
-                        </div>
-                        <div className="flex-1 space-y-0.5">
-                          <div className="flex justify-between text-[9px] text-slate-300 font-mono">
-                            <span>OUT AUDIO</span>
-                            <span>{audioOutLevel}%</span>
-                          </div>
-                          <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
-                            <div className="h-full bg-emerald-400 transition-all duration-75" style={{ width: `${audioOutLevel}%` }} />
-                          </div>
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={handleEndCall}
-                        className="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-md transition-all"
-                      >
-                        <PhoneOff className="w-3.5 h-3.5" />
-                        <span>End Call</span>
                       </button>
                     </div>
                   )}
@@ -1094,7 +1032,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* LUCY 2.5 Real-Time fal.ai Avatar & Reference Image Uploader */}
+              {/* RICH X Neural Video Engine Target Avatar & Reference Image Uploader */}
               <AvatarReferenceUploader
                 referenceImageUrl={config.referenceImageUrl}
                 onImageChange={handleUpdateReferenceImage}
@@ -1846,34 +1784,7 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* Compact Lip-Sync HUD inside Viewport */}
-                  {isCallActive && (
-                    <div className="absolute top-3 left-3 flex items-center gap-2 z-20 pointer-events-none">
-                      <div className="flex items-center gap-1.5 bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/10 text-[11px] font-mono text-purple-400 font-semibold">
-                        <div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
-                        <span>VIDEO ONLY</span>
-                      </div>
-                      <div className="bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/10 text-[11px] font-mono text-white">
-                        {formatTimer(durationSec)}
-                      </div>
-                      <LipSyncVisualizer
-                        metrics={lipSyncMetrics}
-                        isCallActive={isCallActive}
-                        callMode="video_only"
-                        voiceMode={config.videoOnlyEnableVoiceCloning ? 'cloned_voice' : 'natural_mic'}
-                        micName={currentMicName}
-                        compact
-                      />
-                      {config.referenceImageUrl && (
-                        <div className="flex items-center gap-1.5 bg-black/75 backdrop-blur-md px-2 py-0.5 rounded-full border border-purple-500/40 text-[10px] font-mono text-purple-300">
-                          <img src={config.referenceImageUrl} alt="Target Avatar" className="w-3.5 h-3.5 rounded-full object-cover" />
-                          <span>LUCY 2.5</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Video Idle Placeholder */}
+                  {/* Video Idle Placeholder (Only when NOT active) */}
                   {!isCallActive && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/85 backdrop-blur-xs p-6 text-center space-y-3">
                       <div className="w-14 h-14 rounded-2xl bg-purple-950/70 border border-purple-700/60 flex items-center justify-center text-purple-400">
@@ -1891,12 +1802,12 @@ export default function App() {
                       {config.referenceImageUrl ? (
                         <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-purple-950/60 border border-purple-700/50 text-[11px] text-purple-200">
                           <img src={config.referenceImageUrl} alt="Avatar" className="w-5 h-5 rounded-full object-cover border border-purple-400" />
-                          <span>Avatar Reference Ready for LUCY 2.5 fal.ai</span>
+                          <span>Target Avatar Ready</span>
                         </div>
                       ) : (
                         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-950/60 border border-amber-700/50 text-[11px] text-amber-200">
                           <Info className="w-4 h-4 text-amber-400 shrink-0" />
-                          <span>Upload reference photo below for LUCY 2.5 fal.ai</span>
+                          <span>Select or upload target persona avatar below</span>
                         </div>
                       )}
 
@@ -1920,23 +1831,6 @@ export default function App() {
                             <span>Plan Required (Assigned: {assignedModeDisplayName})</span>
                           </>
                         )}
-                      </button>
-                    </div>
-                  )}
-
-                  {/* In-Call Bottom Bar */}
-                  {isCallActive && (
-                    <div className="absolute bottom-3 inset-x-3 flex items-center justify-between bg-black/75 backdrop-blur-md p-2.5 rounded-xl border border-white/10 z-20">
-                      <div className="flex items-center gap-2 text-xs font-mono text-slate-300">
-                        <Mic className="w-3.5 h-3.5 text-purple-400" />
-                        <span className="truncate max-w-[180px]">Mic: {currentMicName}</span>
-                      </div>
-                      <button
-                        onClick={handleEndCall}
-                        className="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-md transition-all"
-                      >
-                        <PhoneOff className="w-3.5 h-3.5" />
-                        <span>End Video Call</span>
                       </button>
                     </div>
                   )}
@@ -2003,7 +1897,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* LUCY 2.5 Real-Time fal.ai Avatar & Reference Image Uploader */}
+              {/* RICH X Neural Video Engine Target Avatar & Reference Image Uploader */}
               <AvatarReferenceUploader
                 referenceImageUrl={config.referenceImageUrl}
                 onImageChange={handleUpdateReferenceImage}

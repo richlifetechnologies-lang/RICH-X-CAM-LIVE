@@ -1,6 +1,7 @@
 import React from 'react';
 import { Key, Video, Mic, DollarSign, X, Check, ShieldCheck } from 'lucide-react';
 import { RichXCallConfig } from '../types/cloudCall';
+import { FalKeyPairInput } from './FalKeyPairInput';
 
 interface CloudApiModalProps {
   settings: RichXCallConfig;
@@ -52,21 +53,20 @@ export const CloudApiModal: React.FC<CloudApiModalProps> = ({
 
         {/* Content */}
         <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
-          {/* Video Engine API Key */}
+          {/* Video Engine API Key (fal.ai Key Pair) */}
           <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-2">
             <label className="text-xs font-semibold text-white flex items-center gap-1.5">
-              <Video className="w-4 h-4 text-emerald-400" />
-              Real-Time Video Engine Access Key
+              <Video className="w-4 h-4 text-purple-400" />
+              Real-Time Video Engine Access Key (fal.ai LUCY 2.5)
             </label>
             <p className="text-[11px] text-slate-400">
-              Powers real-time 30FPS low-latency neural video transformation for RICH X CAM using your uploaded target avatar reference photos.
+              Powers real-time 30FPS low-latency neural video transformation for RICH X CAM. Both Key ID and Key Secret are required.
             </p>
-            <input
-              type="password"
+            <FalKeyPairInput
               value={localSettings.videoEngineApiKey}
-              onChange={(e) => setLocalSettings({ ...localSettings, videoEngineApiKey: e.target.value })}
-              placeholder="Enter video engine key..."
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+              onChange={(combined) =>
+                setLocalSettings({ ...localSettings, videoEngineApiKey: combined })
+              }
             />
           </div>
 

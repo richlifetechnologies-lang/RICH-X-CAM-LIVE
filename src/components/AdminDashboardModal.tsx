@@ -612,6 +612,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                               </option>
                             ))}
                           </select>
+                          <p className="text-[10px] text-purple-300/90 font-medium mt-1.5 mb-1">
+                            Or assign a dedicated fal.ai Key Pair (Key ID + Key Secret) directly to this license:
+                          </p>
                           <FalKeyPairInput
                             compact
                             className="mt-1"
@@ -1130,7 +1133,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
                       <div className="sm:col-span-4">
                         <label className="block text-[11px] text-slate-400 mb-1">
-                          {newVaultKeyType === 'video' ? 'fal.ai Key ID + Key Secret' : 'API Key Secret Value'}
+                          {newVaultKeyType === 'video' ? 'fal.ai Video Engine Key Pair (Key ID + Key Secret)' : 'API Key Secret Value'}
                         </label>
                         {newVaultKeyType === 'video' ? (
                           <FalKeyPairInput compact value={newVaultApiKey} onChange={setNewVaultApiKey} />
@@ -2233,6 +2236,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     </option>
                   ))}
                 </select>
+                <p className="text-[10px] text-purple-300/90 font-medium mt-1.5 mb-1">
+                  Or configure custom dedicated fal.ai Key Pair (Key ID + Key Secret):
+                </p>
                 <FalKeyPairInput
                   compact
                   dark

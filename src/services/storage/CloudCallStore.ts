@@ -49,7 +49,11 @@ export class CloudCallStore {
   public static saveConfig(cfg: Partial<RichXCallConfig>): RichXCallConfig {
     const current = this.getConfig();
     const merged = { ...current, ...cfg };
-    localStorage.setItem(STORAGE_SETTINGS, JSON.stringify(merged));
+    try {
+      localStorage.setItem(STORAGE_SETTINGS, JSON.stringify(merged));
+    } catch (err) {
+      console.warn('Could not save full settings to localStorage (quota or disabled)', err);
+    }
     return merged;
   }
 

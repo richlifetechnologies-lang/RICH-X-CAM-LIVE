@@ -50,6 +50,7 @@ import { CloudApiModal } from './components/CloudApiModal';
 import { SetupGuideModal } from './components/SetupGuideModal';
 import { ProductKeyActivationModal } from './components/ProductKeyActivationModal';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
+import { AvatarReferenceUploader } from './components/AvatarReferenceUploader';
 import { LicenseService } from './services/licensing/LicenseService';
 import { LicenseKeyItem, SessionFinancials } from './types/licensing';
 import { BillingRateEngine } from './services/billing/BillingRateEngine';
@@ -502,6 +503,13 @@ export default function App() {
     videoEngineRef.current.updatePrompt(prompt, config.referenceImageUrl);
   };
 
+  const handleUpdateReferenceImage = (imageUrl: string) => {
+    const updated = { ...config, referenceImageUrl: imageUrl };
+    setConfig(updated);
+    CloudCallStore.saveConfig(updated);
+    videoEngineRef.current.updateReferenceImage(imageUrl);
+  };
+
   const handleVoiceAdded = (newVoice: ClonedVoiceItem) => {
     const updatedVoices = [newVoice, ...voices];
     setVoices(updatedVoices);
@@ -930,6 +938,12 @@ export default function App() {
                         clonedVoiceName={currentActiveVoice?.name}
                         compact
                       />
+                      {config.referenceImageUrl && (
+                        <div className="flex items-center gap-1.5 bg-black/75 backdrop-blur-md px-2 py-0.5 rounded-full border border-purple-500/40 text-[10px] font-mono text-purple-300">
+                          <img src={config.referenceImageUrl} alt="Target Avatar" className="w-3.5 h-3.5 rounded-full object-cover" />
+                          <span>LUCY 2.5</span>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -947,6 +961,19 @@ export default function App() {
                           Stream live camera video and voice with automatic lip-sync to WhatsApp, Zoom, Discord, and Telegram.
                         </p>
                       </div>
+
+                      {config.referenceImageUrl ? (
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-purple-950/60 border border-purple-700/50 text-[11px] text-purple-200">
+                          <img src={config.referenceImageUrl} alt="Avatar" className="w-5 h-5 rounded-full object-cover border border-purple-400" />
+                          <span>Avatar Reference Ready for LUCY 2.5 fal.ai</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-950/60 border border-amber-700/50 text-[11px] text-amber-200">
+                          <Info className="w-4 h-4 text-amber-400 shrink-0" />
+                          <span>Upload reference photo below for LUCY 2.5 fal.ai</span>
+                        </div>
+                      )}
+
                       <button
                         onClick={handleStartCall}
                         disabled={!isVideoAudioAllowed}
@@ -1066,6 +1093,15 @@ export default function App() {
                   </select>
                 </div>
               </div>
+
+              {/* LUCY 2.5 Real-Time fal.ai Avatar & Reference Image Uploader */}
+              <AvatarReferenceUploader
+                referenceImageUrl={config.referenceImageUrl}
+                onImageChange={handleUpdateReferenceImage}
+                onPromptChange={handleUpdatePrompt}
+                isCallActive={isCallActive}
+                selectedCameraId={config.selectedCameraId}
+              />
 
               {/* Persona Appearance Prompt */}
               <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-2">
@@ -1828,6 +1864,12 @@ export default function App() {
                         micName={currentMicName}
                         compact
                       />
+                      {config.referenceImageUrl && (
+                        <div className="flex items-center gap-1.5 bg-black/75 backdrop-blur-md px-2 py-0.5 rounded-full border border-purple-500/40 text-[10px] font-mono text-purple-300">
+                          <img src={config.referenceImageUrl} alt="Target Avatar" className="w-3.5 h-3.5 rounded-full object-cover" />
+                          <span>LUCY 2.5</span>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1845,6 +1887,19 @@ export default function App() {
                           Pure video avatar transformation using your natural microphone for direct, low-latency lip-sync mouth tracking.
                         </p>
                       </div>
+
+                      {config.referenceImageUrl ? (
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-purple-950/60 border border-purple-700/50 text-[11px] text-purple-200">
+                          <img src={config.referenceImageUrl} alt="Avatar" className="w-5 h-5 rounded-full object-cover border border-purple-400" />
+                          <span>Avatar Reference Ready for LUCY 2.5 fal.ai</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-950/60 border border-amber-700/50 text-[11px] text-amber-200">
+                          <Info className="w-4 h-4 text-amber-400 shrink-0" />
+                          <span>Upload reference photo below for LUCY 2.5 fal.ai</span>
+                        </div>
+                      )}
+
                       <button
                         onClick={handleStartCall}
                         disabled={!isVideoOnlyAllowed}
@@ -1947,6 +2002,15 @@ export default function App() {
                   </select>
                 </div>
               </div>
+
+              {/* LUCY 2.5 Real-Time fal.ai Avatar & Reference Image Uploader */}
+              <AvatarReferenceUploader
+                referenceImageUrl={config.referenceImageUrl}
+                onImageChange={handleUpdateReferenceImage}
+                onPromptChange={handleUpdatePrompt}
+                isCallActive={isCallActive}
+                selectedCameraId={config.selectedCameraId}
+              />
 
               {/* Persona Prompt */}
               <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-2">

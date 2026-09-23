@@ -7,6 +7,8 @@ export class RichXVideoEngine {
   private remoteStream: MediaStream | null = null;
   private dataChannel: RTCDataChannel | null = null;
   private isConnected = false;
+  private currentPrompt = '';
+  private currentImageUrl = '';
 
   public async startWebRTCStream(
     apiKey: string,
@@ -19,6 +21,8 @@ export class RichXVideoEngine {
     outgoingAudioStream?: MediaStream | null
   ): Promise<MediaStream> {
     this.stopStream();
+    this.currentPrompt = prompt || '';
+    this.currentImageUrl = referenceImageUrl || '';
 
     const isPortrait = orientation === 'portrait';
     onStatusChange(`RICH X CAM: Initializing ${isPortrait ? 'Portrait 9:16 (Phone)' : 'Landscape 16:9 (Desktop)'} feed...`);
@@ -107,15 +111,26 @@ export class RichXVideoEngine {
     }
   }
 
-  public updatePrompt(prompt: string, referenceImageUrl?: string): void {
+  public updatePrompt(prompt?: string, referenceImageUrl?: string): void {
+    if (prompt !== undefined) {
+      this.currentPrompt = prompt;
+    }
+    if (referenceImageUrl !== undefined) {
+      this.currentImageUrl = referenceImageUrl;
+    }
+
     if (this.dataChannel && this.dataChannel.readyState === 'open') {
       this.dataChannel.send(
         JSON.stringify({
-          prompt,
-          image_url: referenceImageUrl || null,
+          prompt: this.currentPrompt,
+          image_url: this.currentImageUrl || null,
         })
       );
     }
+  }
+
+  public updateReferenceImage(referenceImageUrl: string): void {
+    this.updatePrompt(undefined, referenceImageUrl);
   }
 
   public stopStream(): void {

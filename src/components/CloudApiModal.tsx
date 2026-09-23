@@ -59,7 +59,7 @@ export const CloudApiModal: React.FC<CloudApiModalProps> = ({
               Real-Time Video Engine Access Key
             </label>
             <p className="text-[11px] text-slate-400">
-              Powers real-time 30FPS low-latency video transformation for RICH X CAM.
+              Powers real-time 30FPS low-latency video transformation for RICH X CAM using fal.ai LUCY 2.5 engine with your uploaded avatar reference photos.
             </p>
             <input
               type="password"

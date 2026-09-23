@@ -29,6 +29,7 @@ export const DEFAULT_CONFIG: RichXCallConfig = {
   selectedOutputId: 'default',
   videoOnlyEnableVoiceCloning: false,
   audioLatencyCompensationMs: 120, // Synchronizes audio delivery with video rendering
+  autoLipSyncCalibration: true, // Automatically calibrates audio-video sync when speaking
   
   spendingCapUsd: 5.0,
   maxDurationMinutes: 20,

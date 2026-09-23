@@ -54,28 +54,31 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         with:
-          tag_name: v1.1.1
-          name: "RICH X CAM LIVE v1.1.1 — Windows Setup Installer (.exe)"
+          tag_name: v1.1.2
+          name: "RICH X CAM LIVE v1.1.2 — Windows Setup Installer (.exe)"
           draft: false
           prerelease: false
           generate_release_notes: true
           body: |
-            # RICH X CAM LIVE v1.1.1 for Windows 10 & 11
+            # RICH X CAM LIVE v1.1.2 for Windows 10 & 11
 
             ### 🚀 Direct Windows Download:
-            - **Standard Windows Setup Wizard**: `RICH-X-CAM-LIVE-Setup-1.1.1.exe`
+            - **Standard Windows Setup Wizard**: `RICH-X-CAM-LIVE-Setup-1.1.2.exe`
               - Full standard installation wizard with custom destination drive/folder selection.
               - Desktop logo icon and Start Menu shortcuts automatically installed.
 
-            ### ✨ What's New in v1.1.1:
-            - **fal.ai Key ID + Key Secret Fields**: every fal.ai video key input in the Admin Dashboard (Ctrl+Shift+A) is now a two-field form — Key ID and Key Secret — combined automatically into the `key-id:key-secret` format fal.ai requires. This fixes the "Establishing WebRTC" then immediate disconnect: a wrong or incomplete key no longer silently kills the call.
-              - Master key: Admin Dashboard → Engine tab.
-              - Per-license keys: create/edit license → "paste video API key (fal.ai)".
-              - Key Vault: Add New Key → type VIDEO.
-              - Find both values at https://fal.ai/dashboard/keys
-            - **Honest Call Errors**: when a call fails, the real error message now stays on screen instead of being overwritten by "Service stopped" — you see exactly why fal.ai refused (e.g. invalid key).
-            - **Camera Preview Toggle**: the Live Webcam Input panel now has a "Turn Camera On" button in standby so you can test your camera before a call, and "Turn Off" during manual preview. During calls the camera still turns on/off automatically.
-            - **Version Bump**: 1.1.0 -> 1.1.1.
+            ### 🔥 Hotfix: "Call failed: Failed to execute 'fetch'" is fixed
+            v1.1.1 could silently load without its built-in API server (antivirus slow-scan on first launch, or a leftover instance holding the port). The app looked normal, but every fal.ai call then failed with `Failed to execute 'fetch' on 'Window'`. v1.1.2 fixes this for good:
+            - **Dynamic API port**: the bundled server now binds a free loopback port at launch, so a previous/zombie instance can never block it.
+            - **Single-instance lock**: opening the app twice focuses the existing window instead of spawning a conflicting second copy.
+            - **Longer health wait + auto-restart**: up to 50 seconds for antivirus scanning, with one automatic server restart in between.
+            - **Visible error dialog**: if the server truly cannot start, you now see a clear dialog telling you what to do (restart / allow in antivirus) instead of a dead app.
+            - **Clear in-app message**: if you press Start Video Call while the API server is unreachable, the status bar now says exactly that instead of a cryptic fetch error.
+
+            ### ✨ Also in this build (from v1.1.1):
+            - **fal.ai Key ID + Key Secret Fields**: every fal.ai video key input in the Admin Dashboard (Ctrl+Shift+A) is a two-field form — Key ID and Key Secret — combined automatically into the `key-id:key-secret` format fal.ai requires.
+            - **Honest Call Errors**: the real fal.ai error stays on screen when a call fails.
+            - **Camera Preview Toggle**: "Turn Camera On/Off" in the Live Webcam Input panel for pre-call testing.
 
             ### 🎙️ Virtual Devices:
             - Run `drivers\install-richx-virtual-devices.bat` as Administrator after installing to set up the "RICHX MIC" audio endpoint (official VB-CABLE driver, installed automatically).

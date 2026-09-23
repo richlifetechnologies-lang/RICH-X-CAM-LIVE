@@ -1,11 +1,14 @@
-const { app, BrowserWindow, session, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, session, shell, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const net = require('net');
 const { exec, spawn } = require('child_process');
 
-const API_PORT = parseInt(process.env.RICHX_API_PORT || '3120', 10);
-const API_BASE = `http://127.0.0.1:${API_PORT}`;
+let API_PORT = parseInt(process.env.RICHX_API_PORT || '3120', 10);
+let API_BASE = `http://127.0.0.1:${API_PORT}`;
 let apiServerProc = null;
+let lastLoadUrl = null;
+let lastLoadOptions = undefined;
 
 function logApi(msg) {
   console.log(`[richx-api] ${msg}`);
@@ -67,6 +70,17 @@ async function waitForApiServer(timeoutMs = 15000) {
   return false;
 }
 
+function findFreePort() {
+  return new Promise((resolve) => {
+    const srv = net.createServer();
+    srv.once('error', () => resolve(0));
+    srv.listen(0, '127.0.0.1', () => {
+      const port = srv.address().port;
+      srv.close(() => resolve(port));
+    });
+  });
+}
+
 function runPowerShell(script, timeoutMs = 60000) {
   return new Promise((resolve) => {
     const encoded = Buffer.from(script, 'utf16le').toString('base64');
@@ -84,7 +98,7 @@ function runPowerShell(script, timeoutMs = 60000) {
   });
 }
 
-function createWindow(loadUrl) {
+function createWindow(loadUrl, loadOptions) {
   const iconPath = path.join(__dirname, '..', 'public', 'icon.png');
 
   const mainWindow = new BrowserWindow({
@@ -128,12 +142,12 @@ function createWindow(loadUrl) {
   app.commandLine.appendSwitch('enable-experimental-web-platform-features');
 
   // Load the app: prefer the local API server (secure context, working /api routes),
-  // fall back to the bundled static files if the server could not start.
+  // fall back to the bundled static files only if the server could not start.
   if (loadUrl) {
     mainWindow.loadURL(loadUrl);
   } else {
     const indexPath = path.join(__dirname, '..', 'dist', 'index.html');
-    mainWindow.loadFile(indexPath).catch(() => {
+    mainWindow.loadFile(indexPath, loadOptions || {}).catch(() => {
       mainWindow.loadURL('http://localhost:3000');
     });
   }
@@ -233,20 +247,75 @@ $knownVirtualAudio = @($audioEndpoints | Where-Object { $_ -match 'CABLE|VB-Audi
   }
 });
 
-app.whenReady().then(async () => {
-  const spawned = startApiServer();
-  let loadUrl = null;
-  if (spawned && (await waitForApiServer())) {
-    loadUrl = `${API_BASE}/`;
-  }
-  createWindow(loadUrl);
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow(loadUrl);
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    const win = BrowserWindow.getAllWindows()[0];
+    if (win) {
+      if (win.isMinimized()) win.restore();
+      win.focus();
     }
   });
-});
+
+  app.whenReady().then(async () => {
+    // Use a free loopback port when possible so a previous/zombie instance can
+    // never block the bundled API server with EADDRINUSE.
+    const envPort = process.env.RICHX_API_PORT;
+    if (!envPort) {
+      const freePort = await findFreePort();
+      if (freePort > 0) {
+        API_PORT = freePort;
+        API_BASE = `http://127.0.0.1:${API_PORT}`;
+      }
+    }
+    logApi(`starting bundled API server on port ${API_PORT}`);
+
+    let ready = false;
+    let spawned = startApiServer();
+    if (spawned) {
+      ready = await waitForApiServer(30000);
+    }
+
+    if (!ready) {
+      logApi('first start attempt did not become ready; restarting bundled server...');
+      if (apiServerProc) {
+        try {
+          apiServerProc.kill();
+        } catch {}
+        apiServerProc = null;
+      }
+      spawned = startApiServer();
+      if (spawned) {
+        ready = await waitForApiServer(20000);
+      }
+    }
+
+    if (ready) {
+      lastLoadUrl = `${API_BASE}/`;
+    } else {
+      logApi('bundled API server failed to start after retry');
+      dialog.showErrorBox(
+        'RICH X CAM LIVE — Video engine server failed to start',
+        'The built-in API server did not start, so video calls cannot connect to fal.ai.\n\n' +
+          'Close and reopen the app. If this keeps happening, reinstall RICH X CAM LIVE ' +
+          'and allow it in your antivirus/firewall.'
+      );
+      lastLoadUrl = null;
+      lastLoadOptions = { query: { apiOffline: '1' } };
+    }
+
+    createWindow(lastLoadUrl, lastLoadOptions);
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow(lastLoadUrl, lastLoadOptions);
+      }
+    });
+  });
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

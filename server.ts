@@ -16,6 +16,14 @@ const SERVER_DIR =
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
+process.on('uncaughtException', (err) => {
+  console.error('[richx-api] uncaughtException:', err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[richx-api] unhandledRejection:', reason);
+});
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -284,8 +292,19 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`RICH X CAM LIVE Server running on http://0.0.0.0:${PORT}`);
+  });
+
+  server.on('error', (err: any) => {
+    if (err && err.code === 'EADDRINUSE') {
+      console.error(
+        `[richx-api] Port ${PORT} is already in use. Another RICH X CAM LIVE instance may be running.`
+      );
+    } else {
+      console.error('[richx-api] server error:', err);
+    }
+    process.exit(1);
   });
 }
 

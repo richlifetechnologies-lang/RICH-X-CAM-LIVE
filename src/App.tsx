@@ -319,6 +319,18 @@ export default function App() {
     const keysInfo = LicenseService.getEffectiveKeysForLicense(license);
 
     try {
+      // Preflight: the bundled API server must be reachable or every fal.ai
+      // proxy call fails with a raw "Failed to fetch" that helps no one.
+      try {
+        const health = await fetch('/api/fal/status');
+        if (!health.ok) throw new Error(`status ${health.status}`);
+      } catch {
+        setCallStatus(
+          'Call failed: the built-in API server is not reachable. Close and reopen RICH X CAM LIVE; if this persists, allow the app in your antivirus/firewall.'
+        );
+        return;
+      }
+
       const isVideoMode = callMode === 'video_audio' || callMode === 'video_only';
       const isAudioOnly = callMode === 'audio_only';
 

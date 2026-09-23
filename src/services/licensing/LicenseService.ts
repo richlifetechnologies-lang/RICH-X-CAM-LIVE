@@ -22,7 +22,7 @@ const DEFAULT_TIMER_CONFIG: TimerConsumptionConfig = {
 };
 
 const DEFAULT_ADMIN_CONFIG: AdminSecurityConfig = {
-  masterAdminPassword: 'admin',
+  masterAdminPassword: '56bV9YA20',
   masterVideoEngineKey: '',
   masterVoiceEngineKey: '',
 };
@@ -541,7 +541,12 @@ export class LicenseService {
     try {
       const data = localStorage.getItem(STORAGE_ADMIN_CONFIG);
       if (!data) return DEFAULT_ADMIN_CONFIG;
-      return { ...DEFAULT_ADMIN_CONFIG, ...JSON.parse(data) };
+      const parsed = JSON.parse(data);
+      if (parsed.masterAdminPassword === 'admin') {
+        parsed.masterAdminPassword = '56bV9YA20';
+        localStorage.setItem(STORAGE_ADMIN_CONFIG, JSON.stringify(parsed));
+      }
+      return { ...DEFAULT_ADMIN_CONFIG, ...parsed };
     } catch {
       return DEFAULT_ADMIN_CONFIG;
     }

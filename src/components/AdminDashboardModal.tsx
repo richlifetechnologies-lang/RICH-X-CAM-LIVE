@@ -107,7 +107,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       setAuthError(null);
       refreshAll();
     } else {
-      setAuthError('Incorrect Master Admin Password. Default is: admin');
+      setAuthError('Access Denied. Incorrect Master Admin Password.');
     }
   };
 
@@ -281,7 +281,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             <div>
               <h3 className="text-base font-bold text-white">Enter Master Admin Passcode</h3>
               <p className="text-xs text-slate-400 mt-1">
-                Authorized administrator access only. (Default password: <code className="text-indigo-300 font-mono">admin</code>)
+                Authorized administrator access only. Enter your private master key to manage licenses and API pools.
               </p>
             </div>
 

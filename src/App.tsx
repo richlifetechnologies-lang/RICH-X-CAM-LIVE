@@ -418,12 +418,15 @@ export default function App() {
         <div className="flex items-center space-x-2.5">
           {/* Active License Minutes HUD */}
           {activeLicense ? (
-            <div
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-mono transition-all ${
+            <button
+              type="button"
+              onClick={() => setIsActivationModalOpen(true)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-mono transition-all hover:border-slate-600 cursor-pointer ${
                 isLowMinutes
                   ? 'bg-amber-950/70 border-amber-500 text-amber-300 animate-pulse'
                   : 'bg-slate-900/90 border-slate-800 text-slate-200 shadow-xs'
               }`}
+              title="Click to view License & Hardware Lock details"
             >
               <Clock className={`w-3.5 h-3.5 ${isLowMinutes ? 'text-amber-400' : 'text-indigo-400'}`} />
               <div className="flex items-center gap-2">
@@ -451,7 +454,7 @@ export default function App() {
                     : 'Full'}
                 </span>
               </div>
-            </div>
+            </button>
           ) : (
             <button
               onClick={() => setIsActivationModalOpen(true)}
@@ -469,16 +472,6 @@ export default function App() {
           >
             <HelpCircle className="w-3.5 h-3.5 text-sky-400" />
             <span className="hidden sm:inline">Calling Apps Guide</span>
-          </button>
-
-          {/* Owner & Admin Portal Button */}
-          <button
-            onClick={() => setIsAdminOpen(true)}
-            className="px-3 py-1.5 rounded-lg bg-indigo-950/70 hover:bg-indigo-900/80 text-indigo-300 text-xs flex items-center gap-1.5 transition-colors border border-indigo-700/60 shadow-xs"
-            title="Owner & Admin Control Panel (or press Ctrl+Shift+A)"
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="hidden md:inline font-medium">Admin Portal</span>
           </button>
         </div>
       </header>
@@ -1031,6 +1024,7 @@ export default function App() {
           setIsActivationModalOpen(false);
           setIsAdminOpen(true);
         }}
+        onClose={() => setIsActivationModalOpen(false)}
       />
 
       {/* Owner & Admin Dashboard Modal */}

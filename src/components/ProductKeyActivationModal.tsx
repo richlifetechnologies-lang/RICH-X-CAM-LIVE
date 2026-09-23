@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Key, ShieldCheck, Cpu, CheckCircle2, AlertCircle, ArrowRight, Lock } from 'lucide-react';
+import { Key, ShieldCheck, Cpu, CheckCircle2, AlertCircle, ArrowRight, Lock, X } from 'lucide-react';
 import { LicenseService } from '../services/licensing/LicenseService';
 import { LicenseKeyItem } from '../types/licensing';
 
@@ -7,12 +7,14 @@ interface ProductKeyActivationModalProps {
   isOpen: boolean;
   onActivated: (license: LicenseKeyItem) => void;
   onOpenAdmin: () => void;
+  onClose?: () => void;
 }
 
 export const ProductKeyActivationModal: React.FC<ProductKeyActivationModalProps> = ({
   isOpen,
   onActivated,
   onOpenAdmin,
+  onClose,
 }) => {
   const [productKey, setProductKey] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -23,6 +25,7 @@ export const ProductKeyActivationModal: React.FC<ProductKeyActivationModalProps>
 
   const currentHWID = LicenseService.getMachineHWID();
   const currentDevice = LicenseService.getDeviceName();
+  const activeLicense = LicenseService.getActiveClientLicense();
 
   const handleActivate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,7 +59,19 @@ export const ProductKeyActivationModal: React.FC<ProductKeyActivationModalProps>
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/95 backdrop-blur-xl p-4">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        {/* Optional Close Button if software is already active */}
+        {activeLicense && onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute top-4 right-4 z-10 p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+            title="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
+
         {/* Top Header Banner */}
         <div className="px-8 pt-8 pb-6 text-center space-y-3 bg-gradient-to-b from-slate-850 to-slate-900 border-b border-slate-800/80">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-600 via-violet-600 to-cyan-500 mx-auto flex items-center justify-center shadow-xl shadow-indigo-600/30">
@@ -86,7 +101,7 @@ export const ProductKeyActivationModal: React.FC<ProductKeyActivationModalProps>
               </div>
             </div>
             <div className="text-[10px] font-mono bg-indigo-950 text-indigo-300 border border-indigo-700/50 px-2 py-0.5 rounded-full font-semibold">
-              PC LOCKED
+              {activeLicense ? 'ACTIVE' : 'LOCKED'}
             </div>
           </div>
 
@@ -153,15 +168,18 @@ export const ProductKeyActivationModal: React.FC<ProductKeyActivationModalProps>
           </button>
         </form>
 
-        {/* Footer Admin Entry */}
-        <div className="px-8 py-3.5 bg-slate-950 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
-          <span className="text-slate-500">Universal DirectShow & CoreAudio Protected</span>
+        {/* Footer Admin Entry on Locked Screen */}
+        <div className="px-8 py-4 bg-slate-950 border-t border-slate-800/80 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-1.5 text-slate-500 text-[11px]">
+            <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Universal DirectShow & CoreAudio Protected</span>
+          </div>
           <button
             type="button"
             onClick={onOpenAdmin}
-            className="text-slate-400 hover:text-indigo-400 font-medium transition-colors flex items-center gap-1"
+            className="px-3.5 py-1.5 rounded-xl bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 border border-indigo-700/60 font-semibold text-xs transition-all flex items-center gap-1.5 shadow-sm"
           >
-            <Lock className="w-3 h-3" />
+            <Lock className="w-3.5 h-3.5 text-indigo-400" />
             <span>Administrator Portal</span>
           </button>
         </div>

@@ -491,8 +491,9 @@ export default function App() {
       );
     } catch (err: any) {
       console.error('Call failed', err);
-      setCallStatus(`Error: ${err.message || 'Failed to start call'}`);
-      handleEndCall();
+      const errorMessage = err?.message || 'Failed to start call';
+      await handleEndCall();
+      setCallStatus(`Call failed: ${errorMessage}`);
     }
   };
 

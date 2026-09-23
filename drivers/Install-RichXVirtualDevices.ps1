@@ -140,13 +140,10 @@ if ($virtualCams.Count -gt 0) {
     $virtualCams | ForEach-Object { Write-Host "    - $_" }
     Write-Host '  RICH X CAM LIVE can send its generated video to any of these devices.' -ForegroundColor Green
 } else {
-    Write-Host '  No virtual camera driver was detected.' -ForegroundColor DarkYellow
-    Write-Host '  A real "RICHX CAM" device requires a virtual camera driver (a native DirectShow filter).'
-    Write-Host '  RICH X CAM LIVE does not bundle one, but free drivers work out of the box.'
-    $answer = Read-Host '  Open the OBS Studio download page (free, includes "OBS Virtual Camera")? [Y/N]'
-    if ($answer -match '^[Yy]$') {
-        Start-Process 'https://obsproject.com/download'
-    }
+    Write-Host '  No third-party virtual camera driver was detected.' -ForegroundColor DarkYellow
+    Write-Host '  The native "RICHX CAM" virtual camera driver (no third-party software)'
+    Write-Host '  ships in an upcoming update. Until then, start calls directly inside'
+    Write-Host '  RICH X CAM LIVE and use its on-screen video output.'
 }
 
 # ============================== Summary ==============================

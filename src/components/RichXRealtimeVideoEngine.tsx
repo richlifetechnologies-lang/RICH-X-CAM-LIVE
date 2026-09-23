@@ -52,8 +52,12 @@ export const RichXRealtimeVideoEngine: React.FC<RichXRealtimeVideoEngineProps> =
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isTheaterMode, setIsTheaterMode] = useState<boolean>(false);
   const [isMirrorWebcam, setIsMirrorWebcam] = useState<boolean>(true);
+  // Privacy-first: camera stays off unless a call is active OR the user
+  // explicitly enables the preview toggle below.
+  const [isPreviewEnabled, setIsPreviewEnabled] = useState<boolean>(false);
 
   const isPortrait = videoOrientation === 'portrait';
+  const cameraShouldBeOn = isCallActive || isPreviewEnabled;
 
   // Manage local webcam stream for the separate live camera input window
   const startLocalWebcam = async (deviceId: string) => {
@@ -100,10 +104,11 @@ export const RichXRealtimeVideoEngine: React.FC<RichXRealtimeVideoEngineProps> =
   };
 
   // Manage local webcam stream for the separate live camera input window.
-  // The physical camera is ONLY acquired while a call is active — it stays
-  // powered off (no getUserMedia) in standby so the webcam light remains off.
+  // The physical camera is ONLY acquired while a call is active or the user
+  // explicitly enabled preview — it stays powered off (no getUserMedia) in
+  // standby so the webcam light remains off.
   useEffect(() => {
-    if (!isCallActive) {
+    if (!cameraShouldBeOn) {
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((t) => t.stop());
         localStreamRef.current = null;
@@ -129,7 +134,7 @@ export const RichXRealtimeVideoEngine: React.FC<RichXRealtimeVideoEngineProps> =
         localStreamRef.current = null;
       }
     };
-  }, [isCallActive, selectedCameraId, videoOrientation]);
+  }, [cameraShouldBeOn, selectedCameraId, videoOrientation]);
 
   // Ensure the video output element plays when call is active and stream is assigned
   useEffect(() => {
@@ -356,6 +361,11 @@ export const RichXRealtimeVideoEngine: React.FC<RichXRealtimeVideoEngineProps> =
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                     FEED ACTIVE
                   </span>
+                ) : isPreviewEnabled ? (
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-800/60 font-semibold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />
+                    PREVIEW
+                  </span>
                 ) : (
                   <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-700/60 font-semibold flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
@@ -366,7 +376,9 @@ export const RichXRealtimeVideoEngine: React.FC<RichXRealtimeVideoEngineProps> =
               <p className="text-[10px] text-slate-400 leading-tight">
                 {isCallActive
                   ? 'Compact physical camera monitor &bull; Tracking facial expressions and motion'
-                  : 'Camera is powered off &bull; It turns on automatically when a call starts'}
+                  : isPreviewEnabled
+                  ? 'Manual preview is on &bull; Camera turns off automatically when a call starts or you stop the preview'
+                  : 'Camera is powered off &bull; Turn it on below to test, or it starts automatically when a call starts'}
               </p>
             </div>
           </div>
@@ -375,10 +387,17 @@ export const RichXRealtimeVideoEngine: React.FC<RichXRealtimeVideoEngineProps> =
           <div className="flex items-center gap-2 self-center sm:self-auto">
             {/* Small Compact Webcam Viewport Window */}
             <div className="relative w-28 sm:w-32 aspect-video rounded-lg overflow-hidden border border-purple-500/60 bg-black shadow shrink-0">
-              {!isCallActive ? (
+              {!cameraShouldBeOn ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 text-slate-500">
                   <Camera className="w-4 h-4 mb-0.5" />
                   <span className="text-[8px] font-semibold leading-none">Camera Off</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsPreviewEnabled(true)}
+                    className="mt-1.5 px-2 py-1 rounded bg-purple-950/80 border border-purple-700/60 text-purple-200 text-[8px] font-semibold hover:bg-purple-900/80 cursor-pointer"
+                  >
+                    Turn Camera On
+                  </button>
                 </div>
               ) : cameraError ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center p-1 text-center bg-slate-950 text-rose-400">
@@ -402,6 +421,15 @@ export const RichXRealtimeVideoEngine: React.FC<RichXRealtimeVideoEngineProps> =
                     className={`w-full h-full object-cover ${isMirrorWebcam ? 'scale-x-[-1]' : ''}`}
                   />
                   <div className="absolute bottom-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-sm" />
+                  {!isCallActive && (
+                    <button
+                      type="button"
+                      onClick={() => setIsPreviewEnabled(false)}
+                      className="absolute inset-x-0 bottom-0 py-0.5 bg-slate-950/85 text-slate-300 text-[8px] font-semibold hover:text-white cursor-pointer"
+                    >
+                      Turn Off
+                    </button>
+                  )}
                 </>
               )}
             </div>

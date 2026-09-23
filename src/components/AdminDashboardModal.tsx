@@ -42,6 +42,7 @@ import {
   RuleProfitabilityAnalysis,
 } from '../types/licensing';
 import { StudioCallMode } from '../types/cloudCall';
+import { FalKeyPairInput } from './FalKeyPairInput';
 
 interface AdminDashboardModalProps {
   isOpen: boolean;
@@ -611,13 +612,12 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                               </option>
                             ))}
                           </select>
-                          <input
-                            type="password"
+                          <FalKeyPairInput
+                            compact
+                            className="mt-1"
                             value={newDirectVideoApiKey}
-                            onChange={(e) => setNewDirectVideoApiKey(e.target.value)}
+                            onChange={setNewDirectVideoApiKey}
                             disabled={newFeatureMode === 'voice_only' || newFeatureMode === 'audio_only'}
-                            placeholder="Or paste video API key (fal.ai)..."
-                            className="mt-1 w-full bg-slate-900 border border-slate-700 disabled:opacity-40 rounded-lg px-2 py-1 text-[11px] text-white font-mono placeholder-slate-600 focus:outline-none focus:border-indigo-500"
                           />
                         </div>
 
@@ -1129,14 +1129,20 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       </div>
 
                       <div className="sm:col-span-4">
-                        <label className="block text-[11px] text-slate-400 mb-1">API Key Secret Value</label>
-                        <input
-                          type="password"
-                          value={newVaultApiKey}
-                          onChange={(e) => setNewVaultApiKey(e.target.value)}
-                          placeholder="Enter secret key string..."
-                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono placeholder-slate-600 focus:outline-none focus:border-indigo-500"
-                        />
+                        <label className="block text-[11px] text-slate-400 mb-1">
+                          {newVaultKeyType === 'video' ? 'fal.ai Key ID + Key Secret' : 'API Key Secret Value'}
+                        </label>
+                        {newVaultKeyType === 'video' ? (
+                          <FalKeyPairInput compact value={newVaultApiKey} onChange={setNewVaultApiKey} />
+                        ) : (
+                          <input
+                            type="password"
+                            value={newVaultApiKey}
+                            onChange={(e) => setNewVaultApiKey(e.target.value)}
+                            placeholder="Enter secret key string..."
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                          />
+                        )}
                       </div>
 
                       <div className="sm:col-span-2">
@@ -2079,16 +2085,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     <div className="space-y-4 pt-2">
                       <div>
                         <label className="block text-xs font-semibold text-slate-300 mb-1">
-                          Master Real-Time Video Engine Key:
+                          Master Real-Time Video Engine Key (fal.ai):
                         </label>
-                        <input
-                          type="password"
+                        <FalKeyPairInput
                           value={adminConfig.masterVideoEngineKey}
-                          onChange={(e) =>
-                            setAdminConfig({ ...adminConfig, masterVideoEngineKey: e.target.value })
+                          onChange={(combined) =>
+                            setAdminConfig({ ...adminConfig, masterVideoEngineKey: combined })
                           }
-                          placeholder="Enter master video engine key..."
-                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono placeholder-slate-600 focus:outline-none focus:border-indigo-500"
                         />
                       </div>
 
@@ -2230,13 +2233,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     </option>
                   ))}
                 </select>
-                <input
-                  type="password"
+                <FalKeyPairInput
+                  compact
+                  dark
+                  className="mt-1"
                   value={editDirectVideoApiKey}
-                  onChange={(e) => setEditDirectVideoApiKey(e.target.value)}
+                  onChange={setEditDirectVideoApiKey}
                   disabled={editFeatureMode === 'voice_only' || editFeatureMode === 'audio_only'}
-                  placeholder="Or paste dedicated video API key (fal.ai)..."
-                  className="w-full bg-slate-950 border border-slate-700 disabled:opacity-40 rounded-lg px-3 py-1.5 text-xs text-white font-mono placeholder-slate-600 focus:outline-none focus:border-indigo-500"
                 />
               </div>
 

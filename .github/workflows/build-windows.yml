@@ -54,27 +54,32 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         with:
-          tag_name: v1.1.0
-          name: "RICH X CAM LIVE v1.1.0 — Windows Setup Installer (.exe)"
+          tag_name: v1.1.1
+          name: "RICH X CAM LIVE v1.1.1 — Windows Setup Installer (.exe)"
           draft: false
           prerelease: false
           generate_release_notes: true
           body: |
-            # RICH X CAM LIVE v1.1.0 for Windows 10 & 11
+            # RICH X CAM LIVE v1.1.1 for Windows 10 & 11
 
             ### 🚀 Direct Windows Download:
-            - **Standard Windows Setup Wizard**: `RICH-X-CAM-LIVE-Setup-1.1.0.exe`
+            - **Standard Windows Setup Wizard**: `RICH-X-CAM-LIVE-Setup-1.1.1.exe`
               - Full standard installation wizard with custom destination drive/folder selection.
               - Desktop logo icon and Start Menu shortcuts automatically installed.
 
-            ### ✨ What's New in v1.1.0:
-            - **Webcam Privacy Fixed**: the camera now stays completely off until you start a call (powered off in standby, no more auto-on at launch).
-            - **Genuine fal.ai LUCY 2.5 Output**: the Video Output panel now shows only the real AI-generated stream. The raw local camera fallback has been removed — if the fal.ai engine can't connect, you get a clear error instead of a fake feed.
-            - **Bundled API Server**: the Express server that proxies fal.ai WebRTC/token/upload routes now ships inside the installed app and starts automatically with it (previously all `/api/fal/*` calls failed in the desktop build).
-            - **Demo Key Removed**: the pre-seeded `RICHX-DEMO-60MIN-LIVE` key is gone. The studio is locked until a valid product key is activated, and tabs respect the license mode (video+audio / audio-only / video-only).
-            - **Honest Virtual Devices**: the installer now creates a real "RICHX MIC" audio endpoint via the official VB-CABLE driver and guides you through a real virtual camera driver (e.g. OBS Virtual Camera) — no phantom registry devices.
-              - Run `drivers\install-richx-virtual-devices.bat` as Administrator after installing.
-            - **Version Bump**: 1.0.3 -> 1.1.0.
+            ### ✨ What's New in v1.1.1:
+            - **fal.ai Key ID + Key Secret Fields**: every fal.ai video key input in the Admin Dashboard (Ctrl+Shift+A) is now a two-field form — Key ID and Key Secret — combined automatically into the `key-id:key-secret` format fal.ai requires. This fixes the "Establishing WebRTC" then immediate disconnect: a wrong or incomplete key no longer silently kills the call.
+              - Master key: Admin Dashboard → Engine tab.
+              - Per-license keys: create/edit license → "paste video API key (fal.ai)".
+              - Key Vault: Add New Key → type VIDEO.
+              - Find both values at https://fal.ai/dashboard/keys
+            - **Honest Call Errors**: when a call fails, the real error message now stays on screen instead of being overwritten by "Service stopped" — you see exactly why fal.ai refused (e.g. invalid key).
+            - **Camera Preview Toggle**: the Live Webcam Input panel now has a "Turn Camera On" button in standby so you can test your camera before a call, and "Turn Off" during manual preview. During calls the camera still turns on/off automatically.
+            - **Version Bump**: 1.1.0 -> 1.1.1.
+
+            ### 🎙️ Virtual Devices:
+            - Run `drivers\install-richx-virtual-devices.bat` as Administrator after installing to set up the "RICHX MIC" audio endpoint (official VB-CABLE driver, installed automatically).
+            - The native "RICHX CAM" virtual camera driver (no third-party software) ships in an upcoming update.
           files: |
             release/*.exe
         env:

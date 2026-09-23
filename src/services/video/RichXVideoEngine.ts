@@ -2,7 +2,14 @@ import { fal } from '@fal-ai/client';
 import { VideoOrientation } from '../../types/cloudCall';
 
 export interface WebRTCConnectionInfo {
-  status: 'idle' | 'requesting_permissions' | 'initializing' | 'connecting' | 'connected' | 'error' | 'disconnected';
+  status:
+    | 'idle'
+    | 'requesting_permissions'
+    | 'initializing'
+    | 'connecting'
+    | 'connected'
+    | 'error'
+    | 'disconnected';
   fps?: number;
   rttMs?: number;
   model: string;
@@ -12,10 +19,10 @@ export class RichXVideoEngine {
   private peerConnection: RTCPeerConnection | null = null;
   private localStream: MediaStream | null = null;
   private remoteStream: MediaStream | null = null;
-  private dataChannel: RTCDataChannel | null = null;
   private realtimeConnection: any = null;
   private isConnected = false;
-  private currentPrompt = 'Professional video presentation, crystal-clear 4k studio lighting, sharp facial detail';
+  private currentPrompt =
+    'Professional video presentation, crystal-clear 4k studio lighting, sharp facial detail';
   private currentImageUrl = '';
   private currentCameraId = 'default';
   private currentOrientation: VideoOrientation = 'landscape';
@@ -143,6 +150,7 @@ export class RichXVideoEngine {
       }
       return stream;
     }
+
     return canvas.captureStream(30);
   }
 
@@ -187,8 +195,9 @@ export class RichXVideoEngine {
 
   /**
    * Starts live Decart LUCY 2.5 Realtime session over WebRTC.
+   * Connects via fal.ai WebSocket signaling relay with MsgPack framing.
+   * Negotiates ICE servers, SDP offer/answer, and Trickle ICE.
    * Resolves only once the genuine fal.ai generated video stream is flowing.
-   * Throws (never falls back to the local camera) when negotiation fails.
    */
   public async startWebRTCStream(
     apiKey: string,
@@ -209,7 +218,9 @@ export class RichXVideoEngine {
     this.currentCameraId = cameraId;
 
     const isPortrait = orientation === 'portrait';
-    onStatusChange(`RICH X CAM: Requesting ${isPortrait ? 'Portrait 9:16 (Phone)' : 'Landscape 16:9 (Desktop)'} camera...`);
+    onStatusChange(
+      `RICH X CAM: Requesting ${isPortrait ? 'Portrait 9:16 (Phone)' : 'Landscape 16:9 (Desktop)'} camera...`
+    );
 
     // 1. Obtain Local Webcam Feed
     await this.initCameraPreview(cameraId, orientation);
@@ -222,219 +233,266 @@ export class RichXVideoEngine {
     const processedImageUrl = await this.prepareReferenceImageUrl(referenceImageUrl, apiKey);
     this.currentImageUrl = processedImageUrl;
 
-    onStatusChange('RICH X CAM: Establishing WebRTC connection to Realtime Video Engine...');
+    // 3. Mint short-lived client token from server proxy
+    onStatusChange('RICH X CAM: Authenticating with fal.ai realtime gateway...');
+    const handshakeHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (apiKey && apiKey.trim()) {
+      handshakeHeaders['x-fal-key'] = apiKey.trim();
+    }
 
-    try {
-      // Setup WebRTC Peer Connection with standard STUN servers
-      this.peerConnection = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:global.stun.twilio.com:3478' },
-        ],
-        bundlePolicy: 'max-bundle',
-      });
+    const tokenRes = await fetch('/api/fal/token', {
+      method: 'POST',
+      headers: handshakeHeaders,
+    });
 
-      // Add local camera video track
-      const videoTrack = this.localStream.getVideoTracks()[0];
-      if (videoTrack) {
-        this.peerConnection.addTrack(videoTrack, this.localStream);
-      }
-
-      // Add outgoing lip-sync driver audio track if provided
-      if (outgoingAudioStream) {
-        const audioTrack = outgoingAudioStream.getAudioTracks()[0];
-        if (audioTrack) {
-          this.outgoingAudioTrack = audioTrack;
-          try {
-            this.peerConnection.addTrack(audioTrack, outgoingAudioStream);
-          } catch (err) {
-            console.warn('Could not add audio track to WebRTC:', err);
-          }
-        }
-      }
-
-      // Create DataChannel for real-time prompt and identity switching
-      this.dataChannel = this.peerConnection.createDataChannel('richx-prompts', {
-        ordered: true,
-      });
-
-      this.dataChannel.onopen = () => {
-        console.log('RICH X Realtime DataChannel opened');
-        this.sendDataChannelUpdate();
-      };
-
-      this.dataChannel.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          console.log('RICH X DataChannel message received:', msg);
-        } catch {
-          // Ignore non-json
-        }
-      };
-
-      // Set up ontrack to receive generated realtime video output from fal.ai LUCY 2.5
-      this.peerConnection.ontrack = (event) => {
-        console.log('RICH X WebRTC track received:', event);
-        if (event.streams && event.streams[0]) {
-          this.remoteStream = event.streams[0];
-        } else if (event.track) {
-          if (!this.remoteStream) {
-            this.remoteStream = new MediaStream();
-          }
-          this.remoteStream.addTrack(event.track);
-        }
-
-        if (this.remoteStream) {
-          this.isConnected = true;
-          this.onRemoteStreamCb?.(this.remoteStream);
-          this.onStatusChangeCb?.(
-            `RICH X Realtime: Streaming fal.ai LUCY 2.5 @ 30 FPS [${isPortrait ? '9:16 Phone' : '16:9 Desktop'}]`
-          );
-        }
-      };
-
-      this.peerConnection.onconnectionstatechange = () => {
-        const state = this.peerConnection?.connectionState;
-        console.log('WebRTC connection state changed:', state);
-        if (state === 'connected') {
-          this.isConnected = true;
-          this.onStatusChangeCb?.('RICH X CAM: Active Realtime Video Call (30 FPS)');
-        } else if (state === 'disconnected' || state === 'failed') {
-          this.isConnected = false;
-          this.onStatusChangeCb?.('WebRTC connection disconnected. Cleaning up...');
-        }
-      };
-
-      // 3. Create SDP Offer
-      const offer = await this.peerConnection.createOffer({
-        offerToReceiveVideo: true,
-        offerToReceiveAudio: true,
-      });
-      await this.peerConnection.setLocalDescription(offer);
-
-      // Wait for ICE candidate gathering (with 1.5s max safety timeout)
-      await new Promise<void>((resolve) => {
-        if (!this.peerConnection || this.peerConnection.iceGatheringState === 'complete') {
-          resolve();
-          return;
-        }
-        const onIceChange = () => {
-          if (this.peerConnection?.iceGatheringState === 'complete') {
-            this.peerConnection.removeEventListener('icegatheringstatechange', onIceChange);
-            resolve();
-          }
-        };
-        this.peerConnection.addEventListener('icegatheringstatechange', onIceChange);
-        setTimeout(resolve, 1500);
-      });
-
-      const offerSdp = this.peerConnection.localDescription?.sdp || offer.sdp;
-
-      // 4. Negotiate via server handshake
-      onStatusChange('RICH X CAM: Exchanging WebRTC session description with realtime cloud engine...');
-      
-      const handshakeHeaders: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (apiKey) {
-        handshakeHeaders['x-fal-key'] = apiKey;
-      }
-
-      let negotiated = false;
-      const handshakeRes = await fetch('/api/fal/webrtc-handshake', {
-        method: 'POST',
-        headers: handshakeHeaders,
-        body: JSON.stringify({
-          sdp: offerSdp,
-          type: 'offer',
-          prompt: this.currentPrompt,
-          reference_image_url: this.currentImageUrl,
-          orientation: this.currentOrientation,
-        }),
-      });
-
-      if (handshakeRes.ok) {
-        const handshakeData = await handshakeRes.json();
-        const answerSdp =
-          handshakeData.sdp ||
-          handshakeData.answer?.sdp ||
-          handshakeData.candidate?.sdp ||
-          handshakeData.raw?.sdp;
-
-        if (answerSdp && this.peerConnection) {
-          const answerDesc = new RTCSessionDescription({
-            type: (handshakeData.type || 'answer') as RTCSdpType,
-            sdp: answerSdp,
-          });
-          await this.peerConnection.setRemoteDescription(answerDesc);
-          negotiated = true;
-          onStatusChange('RICH X Realtime: Connected to fal.ai LUCY 2.5 WebRTC session. Streaming @ 30 FPS...');
-        }
-      } else {
-        const errJson = await handshakeRes.json().catch(() => ({}));
-        console.warn('webrtc-handshake returned non-200:', handshakeRes.status, errJson);
-      }
-
-      // If the direct server handshake was not possible, negotiate via the fal.realtime
-      // client using a short-lived token minted by our local API server.
-      if (!negotiated) {
-        const tokenRes = await fetch('/api/fal/token', {
-          method: 'POST',
-          headers: handshakeHeaders,
-        });
-
-        if (tokenRes.ok) {
-          const { token } = await tokenRes.json();
-          if (token) {
-            fal.config({ credentials: token });
-            this.realtimeConnection = fal.realtime.connect('decart/lucy-2-5/realtime', {
-              connectionKey: 'lucy-2-5-realtime-session',
-              onResult: async (result: any) => {
-                if (result.sdp && this.peerConnection && this.peerConnection.remoteDescription === null) {
-                  await this.peerConnection.setRemoteDescription(
-                    new RTCSessionDescription({
-                      type: result.type || 'answer',
-                      sdp: result.sdp,
-                    })
-                  );
-                }
-              },
-              onError: (err: any) => {
-                this.realtimeError = err?.message || String(err);
-                console.warn('fal.realtime error:', err);
-              },
-            });
-
-            this.realtimeConnection.send({
-              sdp: offerSdp,
-              type: 'offer',
-              prompt: this.currentPrompt,
-              reference_image_url: this.currentImageUrl,
-              image_url: this.currentImageUrl,
-            });
-
-            onStatusChange('Connected to realtime signaling relay for RICH X CAM');
-          }
-        } else if (tokenRes.status === 401 || tokenRes.status === 403) {
-          throw new Error(
-            'Missing or invalid FAL_KEY for the fal.ai realtime engine. Add your fal.ai key in the Admin Dashboard (Ctrl+Shift+A).'
-          );
-        }
-      }
-
-      if (!negotiated && !this.realtimeConnection) {
+    if (!tokenRes.ok) {
+      const errJson = await tokenRes.json().catch(() => ({}));
+      if (tokenRes.status === 401 || tokenRes.status === 403) {
         throw new Error(
-          'Could not reach the fal.ai realtime signaling service. Check your internet connection and FAL_KEY, then try again.'
+          errJson.error ||
+            'Missing or invalid FAL_KEY. Please provide both Key ID and Key Secret in the Admin Dashboard (Ctrl+Shift+A) or server environment.'
         );
       }
+      throw new Error(
+        errJson.error || `fal.ai authentication failed with status ${tokenRes.status}`
+      );
+    }
 
-      await this.waitForRemoteStream(15000);
+    const { token } = await tokenRes.json();
+    if (!token) {
+      throw new Error('Received invalid authentication response from fal.ai gateway.');
+    }
+
+    onStatusChange('RICH X CAM: Connecting to fal.ai LUCY 2.5 Realtime signaling relay...');
+
+    try {
+      // Configure client token
+      fal.config({ credentials: token });
+
+      // State tracking for the WebRTC offer/answer and Trickle ICE lifecycle
+      let isReady = false;
+      let isAnswered = false;
+      const queuedRemoteCandidates: RTCIceCandidateInit[] = [];
+
+      // Generate a unique connection key per session to prevent stale interpreter caching
+      const sessionUUID =
+        typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : Math.random().toString(36).slice(2) + Date.now().toString(36);
+      const connectionKey = `lucy-${sessionUUID}`;
+
+      // Handler for messages received over the fal.realtime WebSocket signaling channel
+      const handleSignalingMessage = async (msg: any) => {
+        if (!msg) return;
+        const msgType = String(msg.type || '').toLowerCase();
+
+        // A. READY message with ICE servers from Decart / fal.ai
+        if (msgType === 'ready' || msg.iceServers || msg.ice_servers || msg.iceservers) {
+          if (isReady) return;
+          isReady = true;
+
+          const rawIce = msg.iceServers || msg.ice_servers || msg.iceservers;
+          const iceServers: RTCIceServer[] =
+            Array.isArray(rawIce) && rawIce.length > 0
+              ? rawIce
+              : [
+                  { urls: 'stun:stun.l.google.com:19302' },
+                  { urls: 'stun:stun1.l.google.com:19302' },
+                  { urls: 'stun:global.stun.twilio.com:3478' },
+                ];
+
+          onStatusChange('RICH X CAM: Initializing WebRTC PeerConnection with cloud relay...');
+
+          this.peerConnection = new RTCPeerConnection({
+            iceServers,
+            bundlePolicy: 'max-bundle',
+          });
+
+          // Add local camera video track
+          const videoTrack = this.localStream?.getVideoTracks()[0];
+          if (videoTrack && this.localStream) {
+            this.peerConnection.addTrack(videoTrack, this.localStream);
+          }
+
+          // Add outgoing lip-sync driver audio track if provided
+          if (outgoingAudioStream) {
+            const audioTrack = outgoingAudioStream.getAudioTracks()[0];
+            if (audioTrack) {
+              this.outgoingAudioTrack = audioTrack;
+              try {
+                this.peerConnection.addTrack(audioTrack, outgoingAudioStream);
+              } catch (err) {
+                console.warn('Could not add outgoing audio track to WebRTC:', err);
+              }
+            }
+          }
+
+          // Handle incoming remote media tracks (Video + Audio from LUCY 2.5)
+          this.peerConnection.ontrack = (event) => {
+            console.log('RICH X WebRTC track received:', event.track.kind, event);
+            if (event.streams && event.streams[0]) {
+              this.remoteStream = event.streams[0];
+            } else if (event.track) {
+              if (!this.remoteStream) {
+                this.remoteStream = new MediaStream();
+              }
+              this.remoteStream.addTrack(event.track);
+            }
+
+            if (this.remoteStream) {
+              this.isConnected = true;
+              this.onRemoteStreamCb?.(this.remoteStream);
+              this.onStatusChangeCb?.(
+                `RICH X Realtime: Streaming fal.ai LUCY 2.5 @ 30 FPS [${
+                  isPortrait ? '9:16 Phone' : '16:9 Desktop'
+                }]`
+              );
+            }
+          };
+
+          // Forward local ICE candidates to fal.ai over WebSocket signaling
+          this.peerConnection.onicecandidate = (event) => {
+            if (event.candidate && this.realtimeConnection) {
+              try {
+                this.realtimeConnection.send({
+                  type: 'icecandidate',
+                  candidate: {
+                    candidate: event.candidate.candidate,
+                    sdpMid: event.candidate.sdpMid,
+                    sdpMLineIndex: event.candidate.sdpMLineIndex,
+                  },
+                });
+              } catch (err) {
+                console.warn('Failed to forward ICE candidate to fal.ai:', err);
+              }
+            }
+          };
+
+          this.peerConnection.onconnectionstatechange = () => {
+            const state = this.peerConnection?.connectionState;
+            console.log('WebRTC connection state changed:', state);
+            if (state === 'connected') {
+              this.isConnected = true;
+              this.onStatusChangeCb?.('RICH X CAM: Active Realtime Video Call (30 FPS)');
+            } else if (state === 'disconnected' || state === 'failed') {
+              this.isConnected = false;
+              this.onStatusChangeCb?.('WebRTC connection disconnected. Cleaning up...');
+            }
+          };
+
+          // Create SDP Offer
+          onStatusChange('RICH X CAM: Negotiating WebRTC SDP offer with LUCY 2.5...');
+          const offer = await this.peerConnection.createOffer({
+            offerToReceiveVideo: true,
+            offerToReceiveAudio: true,
+          });
+          await this.peerConnection.setLocalDescription(offer);
+
+          if (offer.sdp && this.realtimeConnection) {
+            this.realtimeConnection.send({
+              type: 'offer',
+              sdp: offer.sdp,
+            });
+          }
+          return;
+        }
+
+        // B. ANSWER message with remote SDP from fal.ai / Decart
+        if (msgType === 'answer' || msg.sdp) {
+          const answerSdp = msg.sdp || msg.answer?.sdp;
+          if (answerSdp && this.peerConnection && !isAnswered) {
+            isAnswered = true;
+            onStatusChange('RICH X CAM: Exchanging WebRTC session description with realtime cloud engine...');
+            await this.peerConnection.setRemoteDescription(
+              new RTCSessionDescription({
+                type: 'answer',
+                sdp: answerSdp,
+              })
+            );
+
+            // Flush any queued remote ICE candidates received before answer
+            while (queuedRemoteCandidates.length > 0) {
+              const cand = queuedRemoteCandidates.shift();
+              if (cand && this.peerConnection) {
+                try {
+                  await this.peerConnection.addIceCandidate(new RTCIceCandidate(cand));
+                } catch (e) {
+                  console.warn('Failed to add queued remote ICE candidate:', e);
+                }
+              }
+            }
+          }
+          return;
+        }
+
+        // C. Remote Trickle ICE candidate received from server
+        if (msgType === 'icecandidate' || msg.candidate) {
+          const cand = msg.candidate;
+          if (cand) {
+            if (this.peerConnection && isAnswered) {
+              try {
+                await this.peerConnection.addIceCandidate(new RTCIceCandidate(cand));
+              } catch (e) {
+                console.warn('Failed to add remote ICE candidate:', e);
+              }
+            } else {
+              queuedRemoteCandidates.push(cand);
+            }
+          }
+          return;
+        }
+
+        // D. Error message from signaling server
+        if (msgType === 'error' || msg.error) {
+          const errDetail =
+            msg.error?.message ||
+            msg.message ||
+            (typeof msg.error === 'string' ? msg.error : 'Signaling error reported by fal.ai');
+          this.realtimeError = errDetail;
+          console.error('LUCY 2.5 realtime signaling reported error:', errDetail);
+        }
+      };
+
+      // Connect to fal.ai realtime endpoint
+      this.realtimeConnection = fal.realtime.connect('decart/lucy-2-5/realtime', {
+        connectionKey,
+        tokenProvider: () => Promise.resolve(token),
+        onResult: (result: any) => {
+          handleSignalingMessage(result).catch((err) => {
+            console.warn('Error processing signaling message:', err);
+          });
+        },
+        onError: (err: any) => {
+          this.realtimeError = err?.message || String(err);
+          console.warn('fal.realtime connection error:', err);
+        },
+        throttleInterval: 0,
+      });
+
+      // Send initial configuration message immediately upon connecting
+      const initialInput: Record<string, any> = {
+        prompt: this.currentPrompt || 'Professional video call presentation',
+        enable_prompt_expansion: true,
+      };
+      if (this.currentImageUrl) {
+        initialInput.reference_image_url = this.currentImageUrl;
+        initialInput.image_url = this.currentImageUrl;
+      }
+
+      this.realtimeConnection.send(initialInput);
+      onStatusChange('Connected to realtime signaling relay for RICH X CAM');
+
+      // Wait for the remote generated media stream to arrive
+      await this.waitForRemoteStream(20000);
     } catch (err: any) {
       console.error('WebRTC negotiation failed:', err);
       this.stopStream();
       if (err instanceof Error) throw err;
-      throw new Error(String(err?.message || err || 'Failed to connect to fal.ai LUCY 2.5 realtime engine'));
+      throw new Error(
+        String(err?.message || err || 'Failed to connect to fal.ai LUCY 2.5 realtime engine')
+      );
     }
   }
 
@@ -456,7 +514,11 @@ export class RichXVideoEngine {
         }
         const pcState = this.peerConnection?.connectionState;
         if (pcState === 'failed' || pcState === 'closed') {
-          reject(new Error('WebRTC connection to fal.ai failed or closed before the generated stream arrived.'));
+          reject(
+            new Error(
+              'WebRTC connection to fal.ai failed or closed before the generated stream arrived.'
+            )
+          );
           return;
         }
         if (Date.now() - startedAt >= timeoutMs) {
@@ -479,8 +541,8 @@ export class RichXVideoEngine {
   public async switchCamera(newCameraId: string): Promise<void> {
     if (this.currentCameraId === newCameraId && this.localStream) return;
     this.currentCameraId = newCameraId;
-
     const isPortrait = this.currentOrientation === 'portrait';
+
     const constraints: MediaStreamConstraints = {
       video: {
         deviceId: newCameraId && newCameraId !== 'default' ? { exact: newCameraId } : undefined,
@@ -494,7 +556,6 @@ export class RichXVideoEngine {
     try {
       const newStream = await navigator.mediaDevices.getUserMedia(constraints);
       const newVideoTrack = newStream.getVideoTracks()[0];
-
       if (this.peerConnection && newVideoTrack) {
         const senders = this.peerConnection.getSenders();
         const videoSender = senders.find((s) => s.track?.kind === 'video');
@@ -502,7 +563,6 @@ export class RichXVideoEngine {
           await videoSender.replaceTrack(newVideoTrack);
         }
       }
-
       // Stop old video track
       if (this.localStream) {
         this.localStream.getVideoTracks().forEach((t) => t.stop());
@@ -531,19 +591,14 @@ export class RichXVideoEngine {
   }
 
   private sendDataChannelUpdate(): void {
-    const payload = {
+    const payload: Record<string, any> = {
       prompt: this.currentPrompt,
-      reference_image_url: this.currentImageUrl,
-      image_url: this.currentImageUrl,
+      enable_prompt_expansion: true,
       timestamp: Date.now(),
     };
-
-    if (this.dataChannel && this.dataChannel.readyState === 'open') {
-      try {
-        this.dataChannel.send(JSON.stringify(payload));
-      } catch (err) {
-        console.warn('Failed to send payload over dataChannel:', err);
-      }
+    if (this.currentImageUrl) {
+      payload.reference_image_url = this.currentImageUrl;
+      payload.image_url = this.currentImageUrl;
     }
 
     if (this.realtimeConnection) {
@@ -560,6 +615,7 @@ export class RichXVideoEngine {
    */
   public stopStream(): void {
     this.isConnected = false;
+    this.realtimeError = null;
 
     if (this.realtimeConnection) {
       try {
@@ -567,14 +623,6 @@ export class RichXVideoEngine {
       } catch {}
       this.realtimeConnection = null;
     }
-
-    if (this.dataChannel) {
-      try {
-        this.dataChannel.close();
-      } catch {}
-      this.dataChannel = null;
-    }
-
     if (this.peerConnection) {
       try {
         // Stop all track senders first
@@ -587,28 +635,24 @@ export class RichXVideoEngine {
       } catch {}
       this.peerConnection = null;
     }
-
     if (this.outgoingAudioTrack) {
       try {
         this.outgoingAudioTrack.stop();
       } catch {}
       this.outgoingAudioTrack = null;
     }
-
     if (this.localStream) {
       try {
         this.localStream.getTracks().forEach((t) => t.stop());
       } catch {}
       this.localStream = null;
     }
-
     if (this.remoteStream) {
       try {
         this.remoteStream.getTracks().forEach((t) => t.stop());
       } catch {}
       this.remoteStream = null;
     }
-
     this.onRemoteStreamCb = null;
   }
 }

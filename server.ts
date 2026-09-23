@@ -19,7 +19,6 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 process.on('uncaughtException', (err) => {
   console.error('[richx-api] uncaughtException:', err);
 });
-
 process.on('unhandledRejection', (reason) => {
   console.error('[richx-api] unhandledRejection:', reason);
 });
@@ -61,19 +60,21 @@ app.post('/api/fal/token', async (req: Request, res: Response) => {
   const falKey = getEffectiveFalKey(req);
   if (!falKey) {
     return res.status(401).json({
-      error: 'Missing FAL_KEY. Please configure FAL_KEY in your environment or enter it in the Admin Dashboard.',
+      error:
+        'Missing FAL_KEY. Please configure FAL_KEY in your environment or enter it in the Admin Dashboard (Ctrl+Shift+A).',
     });
   }
 
   try {
+    const authHeader = falKey.startsWith('Key ') ? falKey : `Key ${falKey}`;
     const response = await fetch('https://rest.fal.ai/tokens/', {
       method: 'POST',
       headers: {
-        Authorization: `Key ${falKey}`,
+        Authorization: authHeader,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        allowed_apps: ['decart/lucy-2-5', 'decart/lucy-2-5/realtime'],
+        allowed_apps: ['decart/lucy-2-5', 'decart/lucy-2-5/realtime', 'lucy-2-5'],
         token_expiration: 300,
       }),
     });
@@ -81,7 +82,7 @@ app.post('/api/fal/token', async (req: Request, res: Response) => {
     if (!response.ok) {
       const errText = await response.text();
       return res.status(response.status).json({
-        error: `fal.ai token error (${response.status}): ${errText}`,
+        error: `fal.ai authentication error (${response.status}): ${errText}`,
       });
     }
 
@@ -132,12 +133,13 @@ app.post('/api/fal/upload-image', async (req: Request, res: Response) => {
     }
 
     const buffer = Buffer.from(base64Data, 'base64');
+    const authHeader = falKey.startsWith('Key ') ? falKey : `Key ${falKey}`;
 
     // 1. Initiate upload with fal CDN v3
     const initRes = await fetch('https://rest.fal.ai/storage/upload/initiate?storage_type=fal-cdn-v3', {
       method: 'POST',
       headers: {
-        Authorization: `Key ${falKey}`,
+        Authorization: authHeader,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -178,70 +180,14 @@ app.post('/api/fal/upload-image', async (req: Request, res: Response) => {
 
 /**
  * POST /api/fal/webrtc-handshake
- * Server-side WebRTC SDP exchange proxy for decart/lucy-2-5/realtime
- * Enables SDP negotiation without exposing permanent API keys
+ * Deprecation notice: decart/lucy-2-5/realtime operates over WebSocket signaling.
+ * WebRTC sessions now connect via the official fal.realtime relay with tokens minted by /api/fal/token.
  */
-app.post('/api/fal/webrtc-handshake', async (req: Request, res: Response) => {
-  const falKey = getEffectiveFalKey(req);
-  if (!falKey) {
-    return res.status(401).json({
-      error: 'Missing FAL_KEY. Please configure FAL_KEY in your environment or enter it in the Admin Dashboard.',
-    });
-  }
-
-  const { sdp, type = 'offer', prompt = '', reference_image_url = '' } = req.body;
-
-  if (!sdp) {
-    return res.status(400).json({ error: 'SDP offer is required' });
-  }
-
-  try {
-    const authHeader = falKey.startsWith('Key ') ? falKey : `Key ${falKey}`;
-    const payload: Record<string, any> = {
-      sdp,
-      type,
-      prompt: prompt || 'Professional video call',
-      enable_prompt_expansion: true,
-    };
-
-    if (reference_image_url) {
-      payload.reference_image_url = reference_image_url;
-      payload.image_url = reference_image_url;
-    }
-
-    const response = await fetch('https://fal.run/decart/lucy-2-5/realtime', {
-      method: 'POST',
-      headers: {
-        Authorization: authHeader,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error(`fal.run/decart/lucy-2-5/realtime returned ${response.status}:`, errText);
-      return res.status(response.status).json({
-        error: `fal.ai LUCY 2.5 returned ${response.status}: ${errText}`,
-      });
-    }
-
-    const result = await response.json();
-    const answerSdp =
-      result.sdp ||
-      result.answer?.sdp ||
-      result.candidate?.sdp ||
-      (result.type === 'answer' && result.sdp ? result.sdp : null);
-
-    return res.json({
-      sdp: answerSdp,
-      type: result.type || 'answer',
-      raw: result,
-    });
-  } catch (err: any) {
-    console.error('WebRTC handshake failed', err);
-    return res.status(500).json({ error: err.message || 'WebRTC signaling failed' });
-  }
+app.post('/api/fal/webrtc-handshake', (_req: Request, res: Response) => {
+  return res.status(400).json({
+    error:
+      'LUCY 2.5 Realtime uses WebSocket signaling relay. Please connect directly via fal.realtime client with temporary token from /api/fal/token.',
+  });
 });
 
 /**

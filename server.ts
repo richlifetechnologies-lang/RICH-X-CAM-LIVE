@@ -26,14 +26,27 @@ process.on('unhandledRejection', (reason) => {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Helper to resolve effective FAL_KEY
+// Helper to normalize and validate effective FAL_KEY before using it in a header.
+function sanitizeFalKey(rawKey: string): string {
+  let clean = String(rawKey || '')
+    .normalize('NFKC')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .trim();
+  if ((clean.startsWith('"') && clean.endsWith('"')) || (clean.startsWith("'") && clean.endsWith("'"))) {
+    clean = clean.slice(1, -1).trim();
+  }
+  clean = clean.replace(/^Key\s+/i, '').trim();
+  if (!clean) return '';
+  if (/[\r\n\t]/.test(clean) || !/^[\x20-\x7E]+$/.test(clean)) {
+    throw new Error('The fal.ai key contains unsupported hidden or non-ASCII characters.');
+  }
+  return clean;
+}
+
 function getEffectiveFalKey(req: Request): string {
   const headerKey = req.headers['x-fal-key'] as string;
-  if (headerKey && headerKey.trim()) {
-    return headerKey.trim();
-  }
-  const envKey = process.env.FAL_KEY || process.env.VITE_FAL_KEY || '';
-  return envKey.trim();
+  const rawKey = headerKey && headerKey.trim() ? headerKey : process.env.FAL_KEY || process.env.VITE_FAL_KEY || '';
+  return sanitizeFalKey(rawKey);
 }
 
 /**
@@ -57,7 +70,12 @@ app.get('/api/fal/status', (req: Request, res: Response) => {
  * Following the official fal.ai short-lived client token authentication pattern
  */
 app.post('/api/fal/token', async (req: Request, res: Response) => {
-  const falKey = getEffectiveFalKey(req);
+  let falKey: string;
+  try {
+    falKey = getEffectiveFalKey(req);
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message });
+  }
   if (!falKey) {
     return res.status(401).json({
       error:
@@ -87,8 +105,11 @@ app.post('/api/fal/token', async (req: Request, res: Response) => {
     }
 
     const data = await response.json();
-    const token = typeof data === 'string' ? data : data.token || data.detail || data;
-    return res.json({ token, expires_in: 300 });
+    const token = typeof data === 'string' ? data : data?.token || data?.detail;
+    if (typeof token !== 'string' || !token.trim()) {
+      return res.status(502).json({ error: 'fal.ai returned an invalid temporary token response.' });
+    }
+    return res.json({ token: token.trim(), expires_in: 300 });
   } catch (err: any) {
     console.error('Failed to create fal.ai temporary token', err);
     return res.status(500).json({ error: err.message || 'Internal server error generating token' });
@@ -101,7 +122,12 @@ app.post('/api/fal/token', async (req: Request, res: Response) => {
  * Converts base64 data URIs into hosted URLs required by the decart/lucy-2-5/realtime model
  */
 app.post('/api/fal/upload-image', async (req: Request, res: Response) => {
-  const falKey = getEffectiveFalKey(req);
+  let falKey: string;
+  try {
+    falKey = getEffectiveFalKey(req);
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message });
+  }
   const { image, fileName = 'avatar-identity.jpg' } = req.body;
 
   if (!image) {

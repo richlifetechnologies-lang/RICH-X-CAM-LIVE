@@ -35,13 +35,30 @@ function getApiEndpoint(subpath: string): string {
  */
 export function sanitizeFalKey(rawKey: string): string {
   if (!rawKey) return '';
-  let clean = rawKey.trim();
+
+  // fal.ai keys are ASCII header values. Normalize copy/paste artifacts before
+  // the key reaches Electron fetch or the browser Authorization header.
+  let clean = String(rawKey)
+    .normalize('NFKC')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .trim();
+
   if (
     (clean.startsWith('"') && clean.endsWith('"')) ||
     (clean.startsWith("'") && clean.endsWith("'"))
   ) {
     clean = clean.slice(1, -1).trim();
   }
+
+  clean = clean.replace(/^Key\s+/i, '').trim();
+  if (!clean) return '';
+
+  if (/[\r\n\t]/.test(clean) || !/^[\x20-\x7E]+$/.test(clean)) {
+    throw new Error(
+      'The fal.ai key contains unsupported hidden or non-ASCII characters. Copy it through plain text and enter the Key ID and Secret again.'
+    );
+  }
+
   return clean;
 }
 
@@ -89,9 +106,11 @@ export async function fetchFalClientToken(apiKey: string): Promise<string> {
 
     if (tokenRes.ok) {
       const data = await tokenRes.json();
-      if (data.token) {
-        return data.token;
+      const token = typeof data === 'string' ? data : data?.token || data?.detail;
+      if (typeof token === 'string' && token.trim()) {
+        return token.trim();
       }
+      throw new Error('fal.ai returned an invalid temporary token response.');
     } else {
       const errJson = await tokenRes.json().catch(() => ({}));
       if (tokenRes.status === 401 || tokenRes.status === 403) {
@@ -139,8 +158,8 @@ export async function fetchFalClientToken(apiKey: string): Promise<string> {
     }
 
     const data = await directRes.json();
-    const token = typeof data === 'string' ? data : data.token || data.detail || data;
-    if (token) return token;
+    const token = typeof data === 'string' ? data : data?.token || data?.detail;
+    if (typeof token === 'string' && token.trim()) return token.trim();
   }
 
   throw new Error('Could not obtain authentication token for fal.ai LUCY 2.5 Realtime.');

@@ -54,30 +54,31 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         with:
-          tag_name: v1.2.3
-          name: "RICH X CAM LIVE v1.2.3 — Windows Setup & Portable (.exe)"
+          tag_name: v1.2.4
+          name: "RICH X CAM LIVE v1.2.4 — Windows Setup & Portable (.exe)"
           draft: false
           prerelease: false
           generate_release_notes: true
           body: |
-            # RICH X CAM LIVE v1.2.3 for Windows 10 & 11
+            # RICH X CAM LIVE v1.2.4 for Windows 10 & 11
 
             ### 🚀 Direct Windows Downloads:
             - **Portable Standalone (.exe)** *(No installation required, click & run)*:
-              **`RICH-X-CAM-LIVE-Portable-1.2.3.exe`**
+              **`RICH-X-CAM-LIVE-Portable-1.2.4.exe`**
             - **Standard Windows Setup Wizard (.exe)**:
-              **`RICH-X-CAM-LIVE-Setup-1.2.3.exe`**
+              **`RICH-X-CAM-LIVE-Setup-1.2.4.exe`**
 
-            ### 🛠️ Key Fixes in v1.2.3:
-            1. **NSIS Installer Auto-Process Termination**:
-               - Added custom NSIS installer hook (`build/installer.nsh`) that automatically force-closes lingering background process trees so the installer never gets stuck with the *"cannot be closed"* prompt.
-               - Added portable standalone target (`RICH-X-CAM-LIVE-Portable-1.2.3.exe`) that runs directly without installation.
-            2. **Clean Process Tree Termination on Windows**:
-               - Updated desktop backend child process cleanup using Windows native taskkill tree termination, preventing orphaned background processes.
-            3. **Native Desktop Electron IPC Gateway (v1.2.2)**:
-               - Eliminates localhost `file://` fetch parsing errors and Windows firewall port blocking.
-            4. **Virtual Camera & Virtual Microphone Drivers**:
-               - Bundled native DirectShow Virtual Camera filter (`RICHX CAM`) and Virtual Audio cable (`RICHX MIC`) with registration scripts.
+            ### 🎥 v1.2.4 — LUCY 2.5 signaling made exact (live-verified against fal.ai)
+            The realtime stream was proven end-to-end against fal.ai with a real key (relay answer received, remote audio + video tracks attached, peer connection `connected`, 1280×720 AI frames playing). Three signaling details in the previous build did not match the relay's real protocol and are now corrected:
+            1. **ICE candidates use the relay's real message type**: candidates are now sent as `{type: "candidate"}` with the fully serialized candidate (including `usernameFragment`). The previous `"icecandidate"` type was silently ignored by the relay, so fal.ai never learned our network addresses.
+            2. **Negotiation waits for the relay's actual ICE server list**: the relay first sends `{type: "ready"}` with empty ICE servers, then a separate `{type: "iceServers"}` frame. v1.2.3 started negotiating on the empty `ready` frame and hard-coded public STUN — which would break any session where fal.ai supplies TURN servers. The real list is now used.
+            3. **Prompt and persona image ride on the offer frame**: LUCY 2.5 reads `prompt` / `reference_image_url` from the offer message itself. They were previously sent as a separate message that is not part of the relay schema, so your prompt and target identity could be ignored.
+
+            ### 📦 Everything from v1.2.3 is included:
+            - NSIS installer auto-terminates lingering processes (no more *"cannot be closed"* prompt) + portable standalone target.
+            - Clean Windows process-tree termination for the bundled API server.
+            - Native Electron IPC gateway (no localhost `file://` fetch errors, no firewall port dependency).
+            - Bundled native DirectShow virtual camera (`RICHX CAM`) and virtual audio cable (`RICHX MIC`) with registration scripts.
           files: |
             release/*.exe
         env:

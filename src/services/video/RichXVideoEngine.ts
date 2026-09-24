@@ -229,12 +229,22 @@ export class RichXVideoEngine {
         if (!msg) return;
         const msgType = String(msg.type || '').toLowerCase();
 
-        // A. READY message with ICE servers from Decart / fal.ai
-        if (msgType === 'ready' || msg.iceServers || msg.ice_servers || msg.iceservers) {
+        // A. READY / ICE servers from the fal.ai relay.
+        // The relay sends `{type:'ready'}` with null iceServers first, then a
+        // separate `{type:'iceServers'}` frame. Negotiation must wait for the
+        // real list — starting on the bare `ready` frame would silently drop
+        // any TURN servers fal.ai provides.
+        const rawIce = msg.iceServers || msg.ice_servers || msg.iceservers;
+
+        if (msgType === 'ready' && !rawIce) {
+          onStatusChange('RICH X CAM: Signaling relay ready, requesting ICE servers...');
+          return;
+        }
+
+        if (msgType === 'ready' || msgType === 'iceservers' || rawIce) {
           if (isReady) return;
           isReady = true;
 
-          const rawIce = msg.iceServers || msg.ice_servers || msg.iceservers;
           const iceServers: RTCIceServer[] =
             Array.isArray(rawIce) && rawIce.length > 0
               ? rawIce
@@ -293,17 +303,15 @@ export class RichXVideoEngine {
             }
           };
 
-          // Forward local ICE candidates to fal.ai over WebSocket signaling
+          // Forward local ICE candidates to fal.ai over WebSocket signaling.
+          // The relay expects `{type:'candidate'}` with the full serialized
+          // candidate (including usernameFragment) — anything else is ignored.
           this.peerConnection.onicecandidate = (event) => {
             if (event.candidate && this.realtimeConnection) {
               try {
                 this.realtimeConnection.send({
-                  type: 'icecandidate',
-                  candidate: {
-                    candidate: event.candidate.candidate,
-                    sdpMid: event.candidate.sdpMid,
-                    sdpMLineIndex: event.candidate.sdpMLineIndex,
-                  },
+                  type: 'candidate',
+                  candidate: event.candidate.toJSON(),
                 });
               } catch (err) {
                 console.warn('Failed to forward ICE candidate to fal.ai:', err);
@@ -331,11 +339,18 @@ export class RichXVideoEngine {
           });
           await this.peerConnection.setLocalDescription(offer);
 
+          // LUCY 2.5 reads the prompt and persona image from the offer frame
+          // itself — a separate message is not part of the relay schema.
           if (offer.sdp && this.realtimeConnection) {
-            this.realtimeConnection.send({
+            const offerMessage: Record<string, any> = {
               type: 'offer',
               sdp: offer.sdp,
-            });
+              prompt: this.currentPrompt || 'Professional video call presentation',
+            };
+            if (this.currentImageUrl) {
+              offerMessage.reference_image_url = this.currentImageUrl;
+            }
+            this.realtimeConnection.send(offerMessage);
           }
           return;
         }
@@ -369,7 +384,7 @@ export class RichXVideoEngine {
         }
 
         // C. Remote Trickle ICE candidate received from server
-        if (msgType === 'icecandidate' || msg.candidate) {
+        if (msgType === 'candidate' || msgType === 'icecandidate' || msg.candidate) {
           const cand = msg.candidate;
           if (cand) {
             if (this.peerConnection && isAnswered) {

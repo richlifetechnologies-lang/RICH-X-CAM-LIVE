@@ -414,7 +414,10 @@ export class RichXVideoEngine {
       // Connect to fal.ai realtime endpoint
       this.realtimeConnection = fal.realtime.connect('decart/lucy-2-5/realtime', {
         connectionKey,
-        tokenProvider: () => Promise.resolve(token),
+        // Refresh the short-lived token during long calls instead of reusing
+        // the token minted during startup.
+        tokenProvider: async (_app: string) => fetchFalClientToken(apiKey),
+        tokenExpirationSeconds: 240,
         onResult: (result: any) => {
           handleSignalingMessage(result).catch((err) => {
             console.warn('Error processing signaling message:', err);

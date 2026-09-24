@@ -11,7 +11,23 @@ let lastLoadUrl = null;
 let lastLoadOptions = undefined;
 
 function logApi(msg) {
-  console.log(`[richx-api] ${msg}`);
+  console.log('[richx-api] ' + msg);
+}
+
+function sanitizeFalKey(rawKey) {
+  let clean = String(rawKey || '')
+    .normalize('NFKC')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .trim();
+  if ((clean.startsWith('"') && clean.endsWith('"')) || (clean.startsWith("'") && clean.endsWith("'"))) {
+    clean = clean.slice(1, -1).trim();
+  }
+  clean = clean.replace(/^Key\s+/i, '').trim();
+  if (!clean) return '';
+  if (/[\r\n\t]/.test(clean) || !/^[\x20-\x7E]+$/.test(clean)) {
+    throw new Error('The fal.ai key contains unsupported hidden or non-ASCII characters. Copy it through plain text and enter it again.');
+  }
+  return clean;
 }
 
 /**
@@ -260,7 +276,12 @@ $knownVirtualAudio = @($audioEndpoints | Where-Object { $_ -match 'CABLE|VB-Audi
 
 // Native IPC Handlers for fal.ai Gateway (Fail-Safe: bypasses loopback port, firewall, and CORS)
 ipcMain.handle("fal-token", async (event, { apiKey }) => {
-  const falKey = (apiKey || process.env.FAL_KEY || process.env.VITE_FAL_KEY || "").trim();
+  let falKey;
+  try {
+    falKey = sanitizeFalKey(apiKey || process.env.FAL_KEY || process.env.VITE_FAL_KEY || "");
+  } catch (err) {
+    return { success: false, error: err.message || "Invalid fal.ai key format" };
+  }
   if (!falKey) {
     return {
       success: false,
@@ -291,15 +312,23 @@ ipcMain.handle("fal-token", async (event, { apiKey }) => {
     }
 
     const data = await response.json();
-    const token = typeof data === "string" ? data : data.token || data.detail || data;
-    return { success: true, token, expires_in: 300 };
+    const token = typeof data === "string" ? data : data?.token || data?.detail;
+    if (typeof token !== "string" || !token.trim()) {
+      return { success: false, error: "fal.ai returned an invalid temporary token response." };
+    }
+    return { success: true, token: token.trim(), expires_in: 300 };
   } catch (err) {
     return { success: false, error: err.message || "Error generating fal.ai token" };
   }
 });
 
 ipcMain.handle("fal-upload-image", async (event, { apiKey, image, fileName = "avatar-identity.jpg" }) => {
-  const falKey = (apiKey || process.env.FAL_KEY || process.env.VITE_FAL_KEY || "").trim();
+  let falKey;
+  try {
+    falKey = sanitizeFalKey(apiKey || process.env.FAL_KEY || process.env.VITE_FAL_KEY || "");
+  } catch (err) {
+    return { success: false, error: err.message || "Invalid fal.ai key format" };
+  }
   if (!image) {
     return { success: false, error: "Image data is required" };
   }
